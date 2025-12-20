@@ -58,6 +58,8 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     // US variant:
     dispatch.add_class_route("center_output", &ICType::setCenteringOnRegion);
 
+    dispatch.add_class_route("isocurvature", &ICType::setIsocurvature);
+
     // Gadget options
     dispatch.add_class_route("gadget_particle_type", &ICType::setGadgetParticleType);
     dispatch.add_class_route("gadget_flagged_particle_type", &ICType::setFlaggedGadgetParticleType);

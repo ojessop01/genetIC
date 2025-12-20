@@ -83,6 +83,7 @@ namespace io {
                    multilevelgrid::MultiLevelGrid<DataType> &levelContext,
                    const particle::SpeciesToGeneratorMap<DataType> &particleGenerators,
                    const cosmology::CosmologicalParameters<T> &cosmology,
+                   bool isocurvatureEnabled,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -92,7 +93,7 @@ namespace io {
         outputFilename(fname),
         cosmology(cosmology),
         pvarValue(pvarValue),
-        set_isocurvature(true),
+        set_isocurvature(isocurvatureEnabled),
         f_baryon(T(0)),
         f_cdm(T(0)) {
 
@@ -150,7 +151,7 @@ namespace io {
         "ic_velcx", "ic_velcy", "ic_velcz",
         "ic_poscx", "ic_poscy", "ic_poscz",
         "ic_deltab", "ic_refmap", "ic_pvar_00001",
-        "ic_massc", "ic_particle_ids"
+        "ic_deltac", "ic_particle_ids"
         };
 
         std::vector<tools::MemMapFileWriter> files;
@@ -159,8 +160,6 @@ namespace io {
           files.emplace_back(thisGridFilename + "/" + name);
           writeHeaderForGrid(files.back(), targetGrid);
         }
-
-        const float fcdm_const = static_cast<float>(f_cdm);
         
         for (size_t i_z = 0; i_z < targetGrid.size; ++i_z) {
           pb.tick();
@@ -184,8 +183,8 @@ namespace io {
               Coordinate<float> posScaled(particle.pos * lengthFactorDisplacements);
 
               float deltam = (*overdensityFieldEvaluator)[i];
-              float deltab;
-              float massc;
+              float deltab = deltam;
+              float deltac = deltam;
               
               if (set_isocurvature) {
                 // delta_bc = alpha * delta_m
@@ -193,10 +192,7 @@ namespace io {
               
                 // Modify gas density by (1 + f_b * delta_bc)
                 deltab = deltam * (1.0f + static_cast<float>(f_cdm) * deltabc);
-                massc = f_cdm * (1.0f - static_cast<float>(f_baryon) * deltabc);
-              } else {
-                deltab = deltam;
-                massc = f_cdm;
+                deltac = deltam * (1.0f - static_cast<float>(f_baryon) * deltabc);
               }
               
               float maskVal = this->mask->isInMask(level, i);
@@ -213,7 +209,7 @@ namespace io {
               varMaps[6][file_index] = deltab;
               varMaps[7][file_index] = maskVal;
               varMaps[8][file_index] = pvar;
-              varMaps[9][file_index] = massc;
+              varMaps[9][file_index] = deltac;
 
               idMap[file_index] = global_index;
             }
@@ -259,6 +255,7 @@ namespace io {
               const particle::SpeciesToGeneratorMap<DataType> &generators,
               multilevelgrid::MultiLevelGrid<DataType> &context,
               const cosmology::CosmologicalParameters<T> &cosmology,
+              bool isocurvatureEnabled,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -267,7 +264,7 @@ namespace io {
               std::vector<std::shared_ptr<fields::OutputField<DataType>>> &outputFields) {
 
       GraficOutput<DataType> output(filename, context, generators,
-                                    cosmology, pvarValue,
+                                    cosmology, isocurvatureEnabled, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();

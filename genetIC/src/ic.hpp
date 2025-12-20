@@ -10,7 +10,7 @@
 #include <limits>
 #include <iostream>
 #include <list>
-
+#include <cctype>
 
 #include "tools/numerics/vectormath.hpp"
 #include "tools/numerics/fourier.hpp"
@@ -151,6 +151,9 @@ protected:
   //! Value of passive variable for refinement masks if needed
   T pvarValue = 1.0;
 
+   //! Enable isocurvature-specific mass fractions in grafic output, false by default
+  bool isocurvatureEnabled = true;
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -275,6 +278,19 @@ public:
   void setAutopad(size_t nCells) {
     this->autopad = nCells;
     this->updateParticleMapper();
+  }
+
+//! Set whether to use isocurvature-specific mass fractions in grafic output
+  void setIsocurvature(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->isocurvatureEnabled = true;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->isocurvatureEnabled = false;
+    } else {
+      throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
+    }
   }
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.

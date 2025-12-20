@@ -1,0 +1,25 @@
+# genetIC v1.5.0, compiled: Dec 20 2025, 23:35:36
+#                  runtime: Dec 20 2025, 23:36:59
+
+# git HEAD:bc3c7a1
+# At the time of compilation, the following files had been modified:
+#   genetIC
+#   src/io/.ipynb_checkpoints/grafic-checkpoint.hpp
+#   src/io/grafic.hpp
+#   
+ob 0.0494 
+om 0.3158 
+ol 0.6842 
+s8 0.8117 
+ns 0.966 
+hubble 0.6732 
+z 127 
+camb /cosma/apps/durham/dc-jess1/genetIC/example/planck_2018_transfer_out.dat 
+random_seed 8896131 
+outname no_iso 
+outdir /cosma/apps/durham/dc-jess1/genetIC/example/test2/ 
+outformat grafic 
+base_grid 50 128 
+done 
+dump_ps 0 
+dump_ps 1 
