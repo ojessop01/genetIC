@@ -11,6 +11,9 @@
 namespace io {
   namespace grafic {
 
+    // Global isocurvature coefficient, available throughout this namespace
+    inline constexpr double alpha = -0.0049;
+
     /*! \namespace io::grafic
         \brief Classes to handle output of particles in the grafic format.
     */
@@ -47,13 +50,20 @@ namespace io {
       multilevelgrid::GraficMask<DataType, T> *mask; //!< Grafic mask to be used.
       std::vector<std::shared_ptr<fields::OutputField<DataType>>> outputFields; //!< Vector of output fields (needed for baryon overdensity).
 
-
       T pvarValue; //!< Passive variable.
 
       T lengthFactorHeader; //!< Multiplicative factor from internal units to GRAFIC/RAMSES header units
       T lengthFactorDisplacements; //!< Multiplicative factor from internal position units to GRAFIC/RAMSES displacement units
       T velFactor; //!< Multiplicative factor from internal velocity units to GRAFIC output velocities.
-      size_t iordOffset; //!< Offset for converting grid indices on each level into global grid cell indices. Accumulates as levels are sequentially processed.
+      size_t iordOffset; //!< Offset for converting grid indices on each level into global grid cell indices.
+
+
+      // --- Isocurvature switch ---
+      bool set_isocurvature; //!< Enable isocurvature-specific mass fractions
+
+      // --- Cosmological mass fractions ---
+      T f_baryon; //!< Omega_b / Omega_m
+      T f_cdm;    //!< Omega_cdm / Omega_m
 
     public:
       /*! \brief Constructor
@@ -81,7 +91,10 @@ namespace io {
                    std::vector<std::shared_ptr<fields::OutputField<DataType>>> outFields) :
         outputFilename(fname),
         cosmology(cosmology),
-        pvarValue(pvarValue) {
+        pvarValue(pvarValue),
+        set_isocurvature(true),
+        f_baryon(T(0)),
+        f_cdm(T(0)) {
 
         this->generators = particleGenerators;
         this->outputFields = outFields;
@@ -92,8 +105,14 @@ namespace io {
         mask->calculateMask();
 
         lengthFactorHeader = 1. / cosmology.hubble; // Gadget Mpc a h^-1 -> GrafIC file Mpc a
-        lengthFactorDisplacements = 1.; // Mpc a h^-1 expected. Strange inconsistency with header, but this seems to be correct (see note on RAMSES above).
+        lengthFactorDisplacements = 1.; // Mpc a h^-1 expected.
         velFactor = std::pow(cosmology.scalefactor, 0.5f); // Gadget km s^-1 a^1/2 -> GrafIC km s^-1
+
+        const T OmegaM0 = cosmology.OmegaM0;
+        const T OmegaB0 = cosmology.OmegaBaryons0;
+
+        f_baryon = OmegaB0 / OmegaM0;
+        f_cdm    = (OmegaM0 - OmegaB0) / OmegaM0;
       }
 
       //! \brief Output particles on all levels
@@ -118,59 +137,45 @@ namespace io {
         auto overdensityFieldEvaluator = generators[particle::baryon]->makeOverdensityEvaluatorForGrid(targetGrid);
 
         const grids::Grid<T> &baseGrid = context.getGridForLevel(0);
-        size_t effective_size = tools::getRatioAndAssertPositiveInteger(baseGrid.cellSize * baseGrid.size,
-                                                                        targetGrid.cellSize);
-        tools::progress::ProgressBar pb("write grid " + std::to_string(effective_size), targetGrid.size);
+        size_t effective_size = tools::getRatioAndAssertPositiveInteger(
+                                  baseGrid.cellSize * baseGrid.size,
+                                  targetGrid.cellSize);
 
+        tools::progress::ProgressBar pb("write grid " + std::to_string(effective_size), targetGrid.size);
 
         std::string thisGridFilename = outputFilename + "_" + std::to_string(effective_size);
         mkdir(thisGridFilename.c_str(), 0777);
 
-
-        std::vector<std::string> filenames = {"ic_velcx", "ic_velcy", "ic_velcz", "ic_poscx", "ic_poscy",
-                                              "ic_poscz", "ic_deltab", "ic_refmap", "ic_pvar_00001", "ic_particle_ids"};
-
-        std::vector<size_t> block_lengths = {sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(float) * targetGrid.size2,
-                                             sizeof(size_t) * targetGrid.size2};
+        std::vector<std::string> filenames = {
+        "ic_velcx", "ic_velcy", "ic_velcz",
+        "ic_poscx", "ic_poscy", "ic_poscz",
+        "ic_deltab", "ic_refmap", "ic_pvar_00001",
+        "ic_massc", "ic_particle_ids"
+        };
 
         std::vector<tools::MemMapFileWriter> files;
 
-
-        for (size_t i = 0; i < filenames.size(); ++i) {
-          auto filename_i = filenames[i];
-          files.emplace_back(thisGridFilename + "/" + filename_i);
+        for (const auto &name : filenames) {
+          files.emplace_back(thisGridFilename + "/" + name);
           writeHeaderForGrid(files.back(), targetGrid);
         }
 
-        std::shared_ptr<fields::Field<DataType, T>> baryonFieldOnLevelPtr = nullptr;
-        if (this->outputFields.size() > 1) {
-          for (size_t i = 0; i < outputFields.size(); i++) {
-            this->outputFields[i]->toReal(); // Field should be output in real space
-          }
-
-          baryonFieldOnLevelPtr = outputFields[1]->getFieldForLevel(level).shared_from_this();
-        }
-
+        const float fcdm_const = static_cast<float>(f_cdm);
+        
         for (size_t i_z = 0; i_z < targetGrid.size; ++i_z) {
           pb.tick();
 
           std::vector<tools::MemMapRegion<float>> varMaps;
-          for (int m = 0; m < 9; ++m)
+          for (int m = 0; m < 10; ++m)
             varMaps.push_back(files[m].getMemMapFortran<float>(targetGrid.size2));
 
-          tools::MemMapRegion<size_t> idMap = files[9].getMemMapFortran<size_t>(targetGrid.size2);
+          tools::MemMapRegion<size_t> idMap =
+            files[10].getMemMapFortran<size_t>(targetGrid.size2);
 
 #pragma omp parallel for
           for (size_t i_y = 0; i_y < targetGrid.size; ++i_y) {
             for (size_t i_x = 0; i_x < targetGrid.size; ++i_x) {
+
               size_t i = targetGrid.getIndexFromCoordinateNoWrap(i_x, i_y, i_z);
               size_t global_index = i + iordOffset;
               auto particle = evaluator_dm->getParticleNoOffset(i);
@@ -178,14 +183,26 @@ namespace io {
               Coordinate<float> velScaled(particle.vel * velFactor);
               Coordinate<float> posScaled(particle.pos * lengthFactorDisplacements);
 
-
-              float deltab = (*overdensityFieldEvaluator)[i];
-
-              // Detect whether we are using baryons:
-              float mask = this->mask->isInMask(level, i);
-              float pvar = pvarValue * mask;
+              float deltam = (*overdensityFieldEvaluator)[i];
+              float deltab;
+              float massc;
+              
+              if (set_isocurvature) {
+                // delta_bc = alpha * delta_m
+                const float deltabc = alpha * deltam;
+              
+                // Modify gas density by (1 + f_b * delta_bc)
+                deltab = deltam * (1.0f + static_cast<float>(f_cdm) * deltabc);
+                massc = f_cdm * (1.0f - static_cast<float>(f_baryon) * deltabc);
+              } else {
+                deltab = deltam;
+                massc = f_cdm;
+              }
+              
+              float maskVal = this->mask->isInMask(level, i);
+              float pvar = pvarValue * maskVal;
+              
               size_t file_index = i_y * targetGrid.size + i_x;
-
 
               varMaps[0][file_index] = velScaled.x;
               varMaps[1][file_index] = velScaled.y;
@@ -194,25 +211,24 @@ namespace io {
               varMaps[4][file_index] = posScaled.y;
               varMaps[5][file_index] = posScaled.z;
               varMaps[6][file_index] = deltab;
-              varMaps[7][file_index] = mask;
+              varMaps[7][file_index] = maskVal;
               varMaps[8][file_index] = pvar;
-              idMap[file_index] = global_index;
+              varMaps[9][file_index] = massc;
 
+              idMap[file_index] = global_index;
             }
           }
         }
+
         iordOffset += targetGrid.size3;
       }
-
 
       //! \brief Output the header for a given level of the simulation.
       /*!
       Every file gets the same header.
-      
-      \param file - file to output the header to
-      \param targetGrid - grid to output header for
       */
-      void writeHeaderForGrid(tools::MemMapFileWriter &file, const grids::Grid<T> &targetGrid) {
+      void writeHeaderForGrid(tools::MemMapFileWriter &file,
+                              const grids::Grid<T> &targetGrid) {
         io_header_grafic header = getHeaderForGrid(targetGrid);
         int header_length = static_cast<int>(sizeof(io_header_grafic));
         file.write<int>(header_length);
@@ -221,9 +237,6 @@ namespace io {
       }
 
       //! \brief Returns a grafic header appropriate for the specified grid
-      /*!
-      \param targetGrid - grid to retrieve the header for
-      */
       io_header_grafic getHeaderForGrid(const grids::Grid<T> &targetGrid) const {
         io_header_grafic header;
         header.nx = header.ny = header.nz = targetGrid.size;
@@ -241,28 +254,22 @@ namespace io {
     };
 
     //! \brief Save all grids in the given multi-level context, in grafic format.
-    /*!
-    \param filename - name of output file
-    \param generators - vector of particles generators for each type of particle (dark matter, baryons)
-    \param context - multi-level context on which the overdensity fields are defined.
-    \param cosmology - cosmological parameters
-    \param pvarValue - passive variables for refinement masks
-    \param center - centre point to use for centred grids
-    \param subsample - subsample factor specified in paramter file
-    \param supersample - supersample factor specified in paramter file
-    \param input_mask - Grafic mask being used
-    \param outputFields - Vector of references to underlying overdensity fields
-    */
     template<typename DataType, typename T=tools::datatypes::strip_complex<DataType>>
     void save(const std::string &filename,
               const particle::SpeciesToGeneratorMap<DataType> &generators,
               multilevelgrid::MultiLevelGrid<DataType> &context,
               const cosmology::CosmologicalParameters<T> &cosmology,
-              const T pvarValue, Coordinate<T> center, size_t subsample, size_t supersample,
+              const T pvarValue,
+              Coordinate<T> center,
+              size_t subsample,
+              size_t supersample,
               std::vector<std::vector<size_t>> &input_mask,
               std::vector<std::shared_ptr<fields::OutputField<DataType>>> &outputFields) {
+
       GraficOutput<DataType> output(filename, context, generators,
-                                    cosmology, pvarValue, center, subsample, supersample, input_mask, outputFields);
+                                    cosmology, pvarValue,
+                                    center, subsample, supersample,
+                                    input_mask, outputFields);
       output.write();
     }
 
