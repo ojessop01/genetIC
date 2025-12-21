@@ -59,7 +59,7 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     dispatch.add_class_route("center_output", &ICType::setCenteringOnRegion);
 
     dispatch.add_class_route("two_fluid", &ICType::setIsocurvature);
-    dispatch.add_class_route("target_redshift", &ICType::setIsocurvatureRedshift);
+    dispatch.add_class_route("targetz", &ICType::setIsocurvatureRedshift);
 
     // Gadget options
     dispatch.add_class_route("gadget_particle_type", &ICType::setGadgetParticleType);
