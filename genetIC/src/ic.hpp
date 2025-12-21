@@ -298,6 +298,12 @@ public:
     }
   }
 
+  //! Set the redshift for evaluating the isocurvature coefficient
+  void setIsocurvatureRedshift(T targetz) {
+    this->isocurvatureRedshift = targetz;
+    logging::entry() << "Isocurvature alpha evaluation redshift set to " << targetz << endl;
+  }
+
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.
   void setBaryonsOnAllLevels() {
@@ -1344,16 +1350,20 @@ public:
           centre = Coordinate<T>(x0, y0, z0);
         }
 
+        const T targetRedshift = std::isnan(isocurvatureRedshift) ? cosmology.redshift : isocurvatureRedshift;
+
         T alphaCoefficient = cosmology::calculateAlphaCoefficientDiscrete(
           cosmology,
-          std::isnan(isocurvatureRedshift) ? cosmology.redshift : isocurvatureRedshift);
+          targetRedshift);
 
         if (spectrum) {
           if (const auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType> *>(spectrum.get())) {
-            alphaCoefficient = cambSpectrum->calculateAlphaCoefficientDiscrete();
+            alphaCoefficient = cambSpectrum->calculateAlphaCoefficientDiscrete(targetRedshift);
           }
         }
-        
+
+        logging::entry() << "Isocurvature alpha at z=" << targetRedshift << " is " << alphaCoefficient << endl;
+
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled, alphaCoefficient, pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);

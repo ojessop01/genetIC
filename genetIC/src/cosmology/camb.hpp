@@ -36,8 +36,6 @@ namespace cosmology {
     }
   };
 
-  const float isocurvature_redshift = 21.0
-
   size_t lru_cache_size = 10;
 
   /*! \class PowerSpectrum
@@ -187,22 +185,18 @@ namespace cosmology {
     CoordinateType ns;        //!< tensor to scalar ratio of the initial power spectrum
     mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
 
-    CoordinateType isocurvatureTransferRescale; //!< Backscaling factor applied to transfer functions for alpha computation
+    CosmologicalParameters<CoordinateType> cosmologyParameters; //!< Cosmology used for transfer-function rescaling
 
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
-    CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename) {
+    CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename)
+        : cosmologyParameters(cosmology) {
       readLinesFromCambOutput(filename);
       for (auto i = speciesToInterpolationPoints.begin(); i != speciesToInterpolationPoints.end(); ++i) {
         this->speciesToTransferFunction[i->first].initialise(kInterpolationPoints, i->second);
       }
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
-
-      // Backscale transfer-function amplitudes from z=0 to isocurvature_redshift for alpha coefficient calculation.
-      CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));
-      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, static_cast<CoordinateType>(isocurvature_redshift)));
-      isocurvatureTransferRescale = growthiso / growth0;
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
@@ -235,7 +229,7 @@ namespace cosmology {
      * We evaluate the integrals with a trapezoidal rule in ln k:
      *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
      */
-    CoordinateType calculateAlphaCoefficientDiscrete() const {
+    CoordinateType calculateAlphaCoefficientDiscrete(CoordinateType targetRedshift) const {
       auto it_c = speciesToInterpolationPoints.find(particle::species::dm);
       auto it_b = speciesToInterpolationPoints.find(particle::species::baryon);
       auto it_m = speciesToInterpolationPoints.find(particle::species::all);
@@ -264,7 +258,7 @@ namespace cosmology {
         );
       }
     
-      const CoordinateType g = isocurvatureTransferRescale;
+      const CoordinateType g = calculateIsocurvatureTransferRescale(targetRedshift);
     
       CoordinateType num = 0;
       CoordinateType den = 0;
@@ -309,6 +303,14 @@ namespace cosmology {
       }
     
       return num / den;
+    }
+
+
+  private:
+    CoordinateType calculateIsocurvatureTransferRescale(CoordinateType targetRedshift) const {
+      auto growth0 = growthFactor(cosmologyAtRedshift(cosmologyParameters, 0));
+      auto growthiso = growthFactor(cosmologyAtRedshift(cosmologyParameters, targetRedshift));
+      return growthiso / growth0;
     }
 
 

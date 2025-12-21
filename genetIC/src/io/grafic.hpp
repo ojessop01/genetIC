@@ -138,6 +138,8 @@ namespace io {
         auto evaluator_dm = generators[particle::dm]->makeParticleEvaluatorForGrid(targetGrid);
         auto overdensityFieldEvaluator = generators[particle::baryon]->makeOverdensityEvaluatorForGrid(targetGrid);
 
+        const float alpha = static_cast<float>(isocurvatureAlpha);
+
         const grids::Grid<T> &baseGrid = context.getGridForLevel(0);
         size_t effective_size = tools::getRatioAndAssertPositiveInteger(
                                   baseGrid.cellSize * baseGrid.size,
