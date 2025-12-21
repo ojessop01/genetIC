@@ -11,6 +11,8 @@
 #include <iostream>
 #include <list>
 #include <cctype>
+#include <stdexcept>
+#include <sstream>
 
 #include "tools/numerics/vectormath.hpp"
 #include "tools/numerics/fourier.hpp"
@@ -153,7 +155,7 @@ protected:
 
   //! Enable isocurvature-specific mass fractions in grafic output, false by default
   bool isocurvatureEnabled = true;
-
+                                      
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -1342,7 +1344,7 @@ public:
         }
 
         grafic::save(getOutputPath() + ".grafic",
-                     pParticleGenerator, multiLevelContext, cosmology,isocurvatureEnabled, pvarValue, centre,
+                     pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled, pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
       default:
