@@ -18,6 +18,8 @@ namespace io {
 
     using std::ofstream;
 
+    const float alpha = -0.0049;
+
     /*! \struct io_header_grafic
         \brief Contains data for grafic-format headers.
     */
