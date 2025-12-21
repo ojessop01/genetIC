@@ -7,6 +7,7 @@
 #include <map>
 
 
+#include "src/cosmology/isocurvature.hpp"
 #include "src/cosmology/parameters.hpp"
 #include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
@@ -22,9 +23,6 @@
     The input transfer function is tied to CAMB format.
  */
 namespace cosmology {
-
-    // Redshift at which the isocurvature mode is defined
-  inline double isocurvature_redshift = 99.0;
 
   /* \class CacheKeyComparator
    * Comparison class for pair<weak_ptr<...>,...>, using owner_less comparison on the weak_ptr
@@ -189,6 +187,7 @@ namespace cosmology {
     mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
 
     CoordinateType isocurvatureTransferRescale; //!< Backscaling factor applied to transfer functions for alpha computation
+    CoordinateType isocurvatureTargetRedshift;  //!< Target redshift used for isocurvature transfer-function rescaling
 
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
@@ -200,10 +199,15 @@ namespace cosmology {
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
 
-      // Backscale transfer-function amplitudes from z=0 to isocurvature_redshift for alpha coefficient calculation.
+      isocurvatureTargetRedshift = static_cast<CoordinateType>(isocurvature_redshift);
+
+      // Backscale transfer-function amplitudes from z=0 to the configured target redshift for alpha coefficient calculation.
       CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));
-      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, static_cast<CoordinateType>(isocurvature_redshift)));
+      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, isocurvatureTargetRedshift));
       isocurvatureTransferRescale = growthiso / growth0;
+
+      const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
+      isocurvature_alpha() = static_cast<double>(alpha);
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
@@ -237,6 +241,10 @@ namespace cosmology {
      *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
      */
     CoordinateType calculateAlphaCoefficientDiscrete() const {
+      logging::entry()
+        << "Calculating alpha coefficient with baryon, CDM, and matter transfers "
+        << "backscaled to z=" << isocurvatureTargetRedshift << std::endl;
+    
       auto it_c = speciesToInterpolationPoints.find(particle::species::dm);
       auto it_b = speciesToInterpolationPoints.find(particle::species::baryon);
       auto it_m = speciesToInterpolationPoints.find(particle::species::all);
@@ -270,7 +278,6 @@ namespace cosmology {
       CoordinateType num = 0;
       CoordinateType den = 0;
     
-      // Trapezoidal integration in ln k
       for (size_t i = 0; i + 1 < n; ++i) {
         const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i]);
         const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1]);
@@ -279,16 +286,17 @@ namespace cosmology {
     
         const CoordinateType dlnk = std::log(k2 / k1);
     
-        // Backscaled transfer functions
-        const CoordinateType Tbc1 =
-          g * static_cast<CoordinateType>(Tb[i]     - Tc[i]);
-        const CoordinateType Tbc2 =
-          g * static_cast<CoordinateType>(Tb[i + 1] - Tc[i + 1]);
+        const CoordinateType Tb1 = g * static_cast<CoordinateType>(Tb[i]);
+        const CoordinateType Tb2 = g * static_cast<CoordinateType>(Tb[i + 1]);
     
-        const CoordinateType Tm1 =
-          g * static_cast<CoordinateType>(Tm[i]);
-        const CoordinateType Tm2 =
-          g * static_cast<CoordinateType>(Tm[i + 1]);
+        const CoordinateType Tc1 = g * static_cast<CoordinateType>(Tc[i]);
+        const CoordinateType Tc2 = g * static_cast<CoordinateType>(Tc[i + 1]);
+    
+        const CoordinateType Tm1 = g * static_cast<CoordinateType>(Tm[i]);
+        const CoordinateType Tm2 = g * static_cast<CoordinateType>(Tm[i + 1]);
+    
+        const CoordinateType Tbc1 = Tb1 - Tc1;
+        const CoordinateType Tbc2 = Tb2 - Tc2;
     
         const CoordinateType w1 = std::pow(k1, ns + 3);
         const CoordinateType w2 = std::pow(k2, ns + 3);
@@ -309,8 +317,14 @@ namespace cosmology {
         );
       }
     
-      return num / den;
+      const CoordinateType alpha = num / den;
+    
+      logging::entry()
+        << "Computed alpha coefficient = " << alpha << std::endl;
+    
+      return alpha;
     }
+
 
 
   protected:

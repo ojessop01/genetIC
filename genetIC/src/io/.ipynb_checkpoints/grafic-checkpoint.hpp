@@ -2,6 +2,8 @@
 #include <src/simulation/particles/multilevelgenerator.hpp>
 #include <src/simulation/multilevelgrid/mask.hpp>
 #include "src/tools/memmap.hpp"
+#include "src/cosmology/isocurvature.hpp"
+#include "src/cosmology/parameters.hpp"
 #include <memory>
 #include <vector>
 #include <algorithm>
@@ -11,9 +13,6 @@
 
 namespace io {
   namespace grafic {
-
-    // Global isocurvature coefficient, available throughout this namespace
-    inline constexpr double alpha = -0.0049;
 
     /*! \namespace io::grafic
         \brief Classes to handle output of particles in the grafic format.
@@ -172,31 +171,48 @@ namespace io {
           tools::MemMapRegion<size_t> idMap =
             files[11].getMemMapFortran<size_t>(targetGrid.size2);
 
+        // Log once, outside the OpenMP region
+        float alpha_iso = 0.0f;
+        if (set_isocurvature) {
+          alpha_iso = static_cast<float>(cosmology::isocurvature_alpha());
+        
+          logging::entry()
+            << "Isocurvature enabled: perturbing baryon and CDM density fields"
+            << std::endl;
+        
+          logging::entry()
+            << "Using isocurvature alpha = " << alpha_iso
+            << std::endl;
+        }
+        
 #pragma omp parallel for
-          for (size_t i_y = 0; i_y < targetGrid.size; ++i_y) {
-            for (size_t i_x = 0; i_x < targetGrid.size; ++i_x) {
+        for (size_t i_y = 0; i_y < targetGrid.size; ++i_y) {
+          for (size_t i_x = 0; i_x < targetGrid.size; ++i_x) {
+        
+            size_t i = targetGrid.getIndexFromCoordinateNoWrap(i_x, i_y, i_z);
+            size_t global_index = i + iordOffset;
+            auto particle = evaluator_dm->getParticleNoOffset(i);
+        
+            Coordinate<float> velScaled(particle.vel * velFactor);
+            Coordinate<float> posScaled(particle.pos * lengthFactorDisplacements);
+        
+            float deltam = (*overdensityFieldEvaluator)[i];
+            float deltab = deltam;
+            float deltac = deltam;
+            float massc  = fc;
+        
+            if (set_isocurvature) {
+              // delta_bc = alpha * delta_m
+              const float deltabc = alpha_iso * deltam;
+        
+              // Modify gas and CDM density fields
+              deltab = deltam * (1.0f + static_cast<float>(fc) * deltabc);
+              deltac = deltam * (1.0f - static_cast<float>(fbaryon) * deltabc);
+        
+              // Update CDM particle mass field consistently
+              massc = fc * ((1.0f + deltac) / (1.0f + deltam));
+            }
 
-              size_t i = targetGrid.getIndexFromCoordinateNoWrap(i_x, i_y, i_z);
-              size_t global_index = i + iordOffset;
-              auto particle = evaluator_dm->getParticleNoOffset(i);
-
-              Coordinate<float> velScaled(particle.vel * velFactor);
-              Coordinate<float> posScaled(particle.pos * lengthFactorDisplacements);
-
-              float deltam = (*overdensityFieldEvaluator)[i];
-              float deltab = deltam;
-              float deltac = deltam;
-              float massc = fc;
-              
-              if (set_isocurvature) {
-                // delta_bc = alpha * delta_m
-                const float deltabc = alpha * deltam;
-              
-                // Modify gas density by (1 + fb * delta_bc)
-                deltab = deltam * (1.0f + static_cast<float>(fc) * deltabc);
-                deltac = deltam * (1.0f - static_cast<float>(fbaryon) * deltabc);
-                massc = fc * ((1.0f + deltac) / (1.0f + deltam));
-              }
               
               float maskVal = this->mask->isInMask(level, i);
               float pvar = pvarValue * maskVal;
