@@ -23,6 +23,10 @@
  */
 namespace cosmology {
 
+  // Redshift at which we want to interpret/backscale transfer functions before computing the isocurvature alpha coefficient.
+  // CAMB transfer functions are assumed to be provided at z=0 in the input file.
+  constexpr double isocurvature_redshift = 99.0;
+
   /* \class CacheKeyComparator
    * Comparison class for pair<weak_ptr<...>,...>, using owner_less comparison on the weak_ptr
    * This enables maps with weak pointers as keys, as used by caching in the PowerSpectrum class.
@@ -95,7 +99,6 @@ namespace cosmology {
       }
     }
 
-
   protected:
     //! Calculate the theoretical power spectrum for a given grid
     virtual std::shared_ptr<fields::Field<DataType, CoordinateType>>
@@ -117,8 +120,6 @@ namespace cosmology {
       return P;
 
     }
-
-
 
   public:
 
@@ -190,6 +191,8 @@ namespace cosmology {
     CoordinateType ns;        //!< tensor to scalar ratio of the initial power spectrum
     mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
 
+    CoordinateType isocurvatureTransferRescale; //!< Backscaling factor applied to transfer functions for alpha computation
+
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
     CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename) {
@@ -199,6 +202,11 @@ namespace cosmology {
       }
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
+
+      // Backscale transfer-function amplitudes from z=0 to isocurvature_redshift for alpha coefficient calculation.
+      CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));
+      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, static_cast<CoordinateType>(isocurvature_redshift)));
+      isocurvatureTransferRescale = growthiso / growth0;
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
@@ -215,7 +223,87 @@ namespace cosmology {
       return amplitude * pow(k, ns) * linearTransfer * linearTransfer;
     }
 
+    /*!
+     * \brief Compute alpha = <δ_bc δ_m> / <δ_m^2> from the discrete CAMB transfer-function table.
+     *
+     * We interpret:
+     *   T_bc(k) = T_b(k) - T_cdm(k)
+     *   T_m (k) = T_all(k)  (CAMB "total matter" column configured via particle::species::all)
+     *
+     * Using the same primordial scaling as the rest of this class:
+     *   P_ij(k) ∝ k^{ns} T_i(k) T_j(k)
+     * and isotropic measure d^3k = 4π k^2 dk, the common constants cancel, giving
+     *
+     *   alpha = ∫ dk k^{ns+2} T_bc(k) T_m(k) / ∫ dk k^{ns+2} T_m(k)^2 .
+     *
+     * We evaluate the integrals with a trapezoidal rule in ln k:
+     *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
+     */
+    CoordinateType calculateAlphaCoefficientDiscrete() const {
+      auto it_c = speciesToInterpolationPoints.find(particle::species::dm);
+      auto it_b = speciesToInterpolationPoints.find(particle::species::baryon);
+      auto it_m = speciesToInterpolationPoints.find(particle::species::all);
 
+      if (it_c == speciesToInterpolationPoints.end() ||
+          it_b == speciesToInterpolationPoints.end() ||
+          it_m == speciesToInterpolationPoints.end()) {
+        throw std::runtime_error("Cannot compute alpha: required CAMB transfer columns (dm, baryon, all) are missing.");
+      }
+
+      const auto &kcamb = kInterpolationPoints;
+      const auto &Tc = it_c->second;
+      const auto &Tb = it_b->second;
+      const auto &Tm = it_m->second;
+
+      size_t n = kcamb.size();
+      if (Tc.size() < n) n = Tc.size();
+      if (Tb.size() < n) n = Tb.size();
+      if (Tm.size() < n) n = Tm.size();
+
+      if (n < 2) {
+        throw std::runtime_error("Cannot compute alpha: CAMB transfer table has insufficient points.");
+      }
+
+      CoordinateType num = 0;
+      CoordinateType den = 0;
+
+      const CoordinateType g = isocurvatureTransferRescale;
+
+      // Trapezoidal integration in ln k:
+      // Integral ∫ dk k^{ns+2} X(k)  ->  ∫ dlnk k^{ns+3} X(k)
+      for (size_t i = 0; i + 1 < n; ++i) {
+        const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i]);
+        const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1]);
+
+        if (k1 <= 0 || k2 <= 0) continue;
+
+        const CoordinateType dlnk = std::log(k2 / k1);
+
+        const CoordinateType Tbc1 = g * static_cast<CoordinateType>(Tb[i]     - Tc[i]);
+        const CoordinateType Tbc2 = g * static_cast<CoordinateType>(Tb[i + 1] - Tc[i + 1]);
+
+        const CoordinateType Tm1  = g * static_cast<CoordinateType>(Tm[i]);
+        const CoordinateType Tm2  = g * static_cast<CoordinateType>(Tm[i + 1]);
+
+        const CoordinateType w1 = std::pow(k1, ns + 3);
+        const CoordinateType w2 = std::pow(k2, ns + 3);
+
+        const CoordinateType fnum1 = w1 * Tbc1 * Tm1;
+        const CoordinateType fnum2 = w2 * Tbc2 * Tm2;
+
+        const CoordinateType fden1 = w1 * Tm1 * Tm1;
+        const CoordinateType fden2 = w2 * Tm2 * Tm2;
+
+        num += static_cast<CoordinateType>(0.5) * (fnum1 + fnum2) * dlnk;
+        den += static_cast<CoordinateType>(0.5) * (fden1 + fden2) * dlnk;
+      }
+
+      if (den == static_cast<CoordinateType>(0)) {
+        throw std::runtime_error("Cannot compute alpha: denominator integral is zero.");
+      }
+
+      return num / den;
+    }
 
   protected:
 
@@ -294,8 +382,7 @@ namespace cosmology {
 
         amplitude = linearRenormFactor * linearRenormFactor;
       }
-
-
+    
       //! Compute the variance in a spherical top hat window
       CoordinateType calculateLinearVarianceInSphere(CoordinateType radius,
                                                      particle::species transferType = particle::species::all) const {
@@ -326,9 +413,7 @@ namespace cosmology {
         return s;
 
       }
-
-
-
+    
   };
 
 }

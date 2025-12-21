@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <cmath>
 #include "src/simulation/particles/species.hpp"
 
 namespace io {
@@ -62,8 +63,8 @@ namespace io {
       bool set_isocurvature; //!< Enable isocurvature-specific mass fractions
 
       // --- Cosmological mass fractions ---
-      T f_baryon; //!< Omega_b / Omega_m
-      T f_cdm;    //!< Omega_cdm / Omega_m
+      T fbaryon; //!< Omega_b / Omega_m
+      T fc;    //!< Omega_cdm / Omega_m
 
     public:
       /*! \brief Constructor
@@ -94,8 +95,8 @@ namespace io {
         cosmology(cosmology),
         pvarValue(pvarValue),
         set_isocurvature(isocurvatureEnabled),
-        f_baryon(T(0)),
-        f_cdm(T(0)) {
+        fbaryon(T(0)),
+        fc(T(0)) {
 
         this->generators = particleGenerators;
         this->outputFields = outFields;
@@ -112,8 +113,8 @@ namespace io {
         const T OmegaM0 = cosmology.OmegaM0;
         const T OmegaB0 = cosmology.OmegaBaryons0;
 
-        f_baryon = OmegaB0 / OmegaM0;
-        f_cdm    = (OmegaM0 - OmegaB0) / OmegaM0;
+        fbaryon = OmegaB0 / OmegaM0;
+        fc    = (OmegaM0 - OmegaB0) / OmegaM0;
       }
 
       //! \brief Output particles on all levels
@@ -151,7 +152,7 @@ namespace io {
         "ic_velcx", "ic_velcy", "ic_velcz",
         "ic_poscx", "ic_poscy", "ic_poscz",
         "ic_deltab", "ic_refmap", "ic_pvar_00001",
-        "ic_deltac", "ic_particle_ids"
+        "ic_deltac","ic_massc", "ic_particle_ids"
         };
 
         std::vector<tools::MemMapFileWriter> files;
@@ -165,11 +166,11 @@ namespace io {
           pb.tick();
 
           std::vector<tools::MemMapRegion<float>> varMaps;
-          for (int m = 0; m < 10; ++m)
+          for (int m = 0; m < 11; ++m)
             varMaps.push_back(files[m].getMemMapFortran<float>(targetGrid.size2));
 
           tools::MemMapRegion<size_t> idMap =
-            files[10].getMemMapFortran<size_t>(targetGrid.size2);
+            files[11].getMemMapFortran<size_t>(targetGrid.size2);
 
 #pragma omp parallel for
           for (size_t i_y = 0; i_y < targetGrid.size; ++i_y) {
@@ -185,14 +186,16 @@ namespace io {
               float deltam = (*overdensityFieldEvaluator)[i];
               float deltab = deltam;
               float deltac = deltam;
+              float massc = fc;
               
               if (set_isocurvature) {
                 // delta_bc = alpha * delta_m
                 const float deltabc = alpha * deltam;
               
-                // Modify gas density by (1 + f_b * delta_bc)
-                deltab = deltam * (1.0f + static_cast<float>(f_cdm) * deltabc);
-                deltac = deltam * (1.0f - static_cast<float>(f_baryon) * deltabc);
+                // Modify gas density by (1 + fb * delta_bc)
+                deltab = deltam * (1.0f + static_cast<float>(fc) * deltabc);
+                deltac = deltam * (1.0f - static_cast<float>(fbaryon) * deltabc);
+                massc = fc * ((1.0f + deltac) / (1.0f + deltam));
               }
               
               float maskVal = this->mask->isInMask(level, i);
@@ -210,6 +213,7 @@ namespace io {
               varMaps[7][file_index] = maskVal;
               varMaps[8][file_index] = pvar;
               varMaps[9][file_index] = deltac;
+              varMaps[10][file_index] = massc;
 
               idMap[file_index] = global_index;
             }

@@ -151,7 +151,7 @@ protected:
   //! Value of passive variable for refinement masks if needed
   T pvarValue = 1.0;
 
-   //! Enable isocurvature-specific mass fractions in grafic output, false by default
+  //! Enable isocurvature-specific mass fractions in grafic output, false by default
   bool isocurvatureEnabled = true;
 
   //! High-pass filtering scale defined for variance calculations
@@ -280,18 +280,21 @@ public:
     this->updateParticleMapper();
   }
 
-//! Set whether to use isocurvature-specific mass fractions in grafic output
+  //! Set whether to use isocurvature-specific mass fractions in grafic output
   void setIsocurvature(std::string flag) {
     std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->isocurvatureEnabled = true;
+      logging::entry() << "Isocurvature-specific Grafic mass fractions: enabled" << endl;
     } else if (flag == "0" || flag == "false" || flag == "off") {
       this->isocurvatureEnabled = false;
+      logging::entry() << "Isocurvature-specific Grafic mass fractions: disabled" << endl;
     } else {
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
     }
   }
+
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.
   void setBaryonsOnAllLevels() {
@@ -1339,7 +1342,7 @@ public:
         }
 
         grafic::save(getOutputPath() + ".grafic",
-                     pParticleGenerator, multiLevelContext, cosmology, pvarValue, centre,
+                     pParticleGenerator, multiLevelContext, cosmology,isocurvatureEnabled, pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
       default:
