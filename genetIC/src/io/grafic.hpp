@@ -12,9 +12,6 @@
 namespace io {
   namespace grafic {
 
-    // Global isocurvature coefficient, available throughout this namespace
-    inline constexpr double alpha = -0.0049;
-
     /*! \namespace io::grafic
         \brief Classes to handle output of particles in the grafic format.
     */
@@ -61,6 +58,7 @@ namespace io {
 
       // --- Isocurvature switch ---
       bool set_isocurvature; //!< Enable isocurvature-specific mass fractions
+      T isocurvatureAlpha;   //!< Isocurvature coefficient used for baryon/CDM split
 
       // --- Cosmological mass fractions ---
       T fbaryon; //!< Omega_b / Omega_m
@@ -85,6 +83,7 @@ namespace io {
                    const particle::SpeciesToGeneratorMap<DataType> &particleGenerators,
                    const cosmology::CosmologicalParameters<T> &cosmology,
                    bool isocurvatureEnabled,
+                   const T isocurvatureAlpha,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -95,6 +94,7 @@ namespace io {
         cosmology(cosmology),
         pvarValue(pvarValue),
         set_isocurvature(isocurvatureEnabled),
+        isocurvatureAlpha(isocurvatureAlpha),
         fbaryon(T(0)),
         fc(T(0)) {
 

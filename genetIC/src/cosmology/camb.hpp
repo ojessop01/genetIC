@@ -23,10 +23,6 @@
  */
 namespace cosmology {
 
-  // Redshift at which we want to interpret/backscale transfer functions before computing the isocurvature alpha coefficient.
-  // CAMB transfer functions are assumed to be provided at z=0 in the input file.
-  constexpr double isocurvature_redshift = 99.0;
-
   /* \class CacheKeyComparator
    * Comparison class for pair<weak_ptr<...>,...>, using owner_less comparison on the weak_ptr
    * This enables maps with weak pointers as keys, as used by caching in the PowerSpectrum class.
@@ -122,7 +118,6 @@ namespace cosmology {
     }
 
   public:
-
 
     //! Return the box- and fft-dependent part of the normalisation of the power spectrum
     static CoordinateType getPowerSpectrumNormalizationForGrid(const grids::Grid<CoordinateType> &grid) {

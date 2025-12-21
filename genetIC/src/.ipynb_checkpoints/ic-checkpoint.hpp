@@ -11,6 +11,7 @@
 #include <iostream>
 #include <list>
 #include <cctype>
+#include <cmath>
 
 #include "tools/numerics/vectormath.hpp"
 #include "tools/numerics/fourier.hpp"
@@ -151,8 +152,10 @@ protected:
   //! Value of passive variable for refinement masks if needed
   T pvarValue = 1.0;
 
-  //! Enable isocurvature-specific mass fractions in grafic output, false by default
+  //! Enable isocurvature-specific mass fractions in grafic output
   bool isocurvatureEnabled = true;
+  //! Redshift at which to evaluate the isocurvature coefficient (defaults to initial-condition redshift)
+  T isocurvatureRedshift = std::numeric_limits<T>::quiet_NaN();
 
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
@@ -1341,8 +1344,18 @@ public:
           centre = Coordinate<T>(x0, y0, z0);
         }
 
+        T alphaCoefficient = cosmology::calculateAlphaCoefficientDiscrete(
+          cosmology,
+          std::isnan(isocurvatureRedshift) ? cosmology.redshift : isocurvatureRedshift);
+
+        if (spectrum) {
+          if (const auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType> *>(spectrum.get())) {
+            alphaCoefficient = cambSpectrum->calculateAlphaCoefficientDiscrete();
+          }
+        }
+        
         grafic::save(getOutputPath() + ".grafic",
-                     pParticleGenerator, multiLevelContext, cosmology,isocurvatureEnabled, pvarValue, centre,
+                     pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled, alphaCoefficient, pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
       default:
