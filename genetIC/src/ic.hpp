@@ -11,6 +11,7 @@
 #include <iostream>
 #include <list>
 #include <cctype>
+#include <cmath>
 
 #include "tools/numerics/vectormath.hpp"
 #include "tools/numerics/fourier.hpp"
@@ -151,8 +152,10 @@ protected:
   //! Value of passive variable for refinement masks if needed
   T pvarValue = 1.0;
 
-  //! Enable isocurvature-specific mass fractions in grafic output, false by default
+  //! Enable isocurvature-specific mass fractions in grafic output
   bool isocurvatureEnabled = true;
+  //! Redshift at which to evaluate the isocurvature coefficient (defaults to initial-condition redshift)
+  T isocurvatureRedshift = std::numeric_limits<T>::quiet_NaN();
 
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
@@ -292,6 +295,18 @@ public:
       logging::entry() << "Isocurvature-specific Grafic mass fractions: disabled" << endl;
     } else {
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
+    }
+  }
+
+  //! Sets the redshift used when computing isocurvature splitting parameters.
+  void setIsocurvatureRedshift(T targetRedshift) {
+    this->isocurvatureRedshift = targetRedshift;
+    logging::entry() << "Isocurvature target redshift set to z=" << targetRedshift << endl;
+
+    if (spectrum) {
+      if (auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType> *>(spectrum.get())) {
+        cambSpectrum->setIsocurvatureRedshift(this->cosmology, targetRedshift);
+      }
     }
   }
 
@@ -743,7 +758,9 @@ public:
   * \param cambFieldPath - string of path to CAMB file
   */
   void setCambDat(std::string cambFilePath) {
-    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath);
+    const T targetRedshift = std::isnan(isocurvatureRedshift) ? cosmology.redshift : isocurvatureRedshift;
+
+    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath, targetRedshift);
     this->multiLevelContext.setPowerspectrumGenerator(*spectrum);
   }
 
@@ -1341,8 +1358,18 @@ public:
           centre = Coordinate<T>(x0, y0, z0);
         }
 
+        T alphaCoefficient = cosmology::calculateAlphaCoefficientDiscrete(
+          cosmology,
+          std::isnan(isocurvatureRedshift) ? cosmology.redshift : isocurvatureRedshift);
+
+        if (spectrum) {
+          if (const auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType> *>(spectrum.get())) {
+            alphaCoefficient = cambSpectrum->calculateAlphaCoefficientDiscrete();
+          }
+        }
+        
         grafic::save(getOutputPath() + ".grafic",
-                     pParticleGenerator, multiLevelContext, cosmology,isocurvatureEnabled, pvarValue, centre,
+                     pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled, alphaCoefficient, pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
       default:

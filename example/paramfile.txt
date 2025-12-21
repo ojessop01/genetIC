@@ -22,6 +22,10 @@ random_seed	8896131
 outname test
 outdir	 ./
 
+
+two_fluid true
+target_redshift 100.0
+
 # Pick output format:
 outformat gadget3
 
