@@ -9,7 +9,7 @@ namespace cosmology {
   // storing the configured target redshift here makes the value visible to both
   // the CAMB loader (which reads it to compute alpha) and the Grafic writer
   // (which needs it only for logging and context).
-  inline double isocurvature_redshift = 99.0;
+  inline double isocurvature_redshift = 0.0;
 
   // Isocurvature baryon-CDM correlation coefficient used for Grafic output.
   //

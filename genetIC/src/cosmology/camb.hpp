@@ -7,7 +7,7 @@
 #include <map>
 
 
-#include "src/cosmology/isocurvature.hpp"
+//#include "src/cosmology/isocurvature.hpp"
 #include "src/cosmology/parameters.hpp"
 #include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
@@ -23,6 +23,8 @@
     The input transfer function is tied to CAMB format.
  */
 namespace cosmology {
+
+  static double isocurvature_redshift = 0.0;
 
   /* \class CacheKeyComparator
    * Comparison class for pair<weak_ptr<...>,...>, using owner_less comparison on the weak_ptr
