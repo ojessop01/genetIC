@@ -298,6 +298,18 @@ public:
     }
   }
 
+  //! Sets the redshift used when computing isocurvature splitting parameters.
+  void setIsocurvatureRedshift(T targetRedshift) {
+    this->isocurvatureRedshift = targetRedshift;
+    logging::entry() << "Isocurvature target redshift set to z=" << targetRedshift << endl;
+
+    if (spectrum) {
+      if (auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType> *>(spectrum.get())) {
+        cambSpectrum->setIsocurvatureRedshift(this->cosmology, targetRedshift);
+      }
+    }
+  }
+
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.
   void setBaryonsOnAllLevels() {
@@ -746,7 +758,9 @@ public:
   * \param cambFieldPath - string of path to CAMB file
   */
   void setCambDat(std::string cambFilePath) {
-    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath);
+    const T targetRedshift = std::isnan(isocurvatureRedshift) ? cosmology.redshift : isocurvatureRedshift;
+
+    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath, targetRedshift);
     this->multiLevelContext.setPowerspectrumGenerator(*spectrum);
   }
 

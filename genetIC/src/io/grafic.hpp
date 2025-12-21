@@ -18,8 +18,6 @@ namespace io {
 
     using std::ofstream;
 
-    const float alpha = -0.0049;
-
     /*! \struct io_header_grafic
         \brief Contains data for grafic-format headers.
     */
@@ -189,10 +187,10 @@ namespace io {
               float deltab = deltam;
               float deltac = deltam;
               float massc = fc;
-              
+
               if (set_isocurvature) {
                 // delta_bc = alpha * delta_m
-                const float deltabc = alpha * deltam;
+                const float deltabc = static_cast<float>(isocurvatureAlpha * deltam);
               
                 // Modify gas density by (1 + fb * delta_bc)
                 deltab = deltam * (1.0f + static_cast<float>(fc) * deltabc);
@@ -262,6 +260,7 @@ namespace io {
               multilevelgrid::MultiLevelGrid<DataType> &context,
               const cosmology::CosmologicalParameters<T> &cosmology,
               bool isocurvatureEnabled,
+              const T isocurvatureAlpha,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -270,7 +269,7 @@ namespace io {
               std::vector<std::shared_ptr<fields::OutputField<DataType>>> &outputFields) {
 
       GraficOutput<DataType> output(filename, context, generators,
-                                    cosmology, isocurvatureEnabled, pvarValue,
+                                    cosmology, isocurvatureEnabled, isocurvatureAlpha, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();

@@ -36,7 +36,7 @@ namespace cosmology {
     }
   };
 
-  const float isocurvature_redshift = 21.0
+  const float isocurvature_redshift = 21.0;
 
   size_t lru_cache_size = 10;
 
@@ -191,17 +191,23 @@ namespace cosmology {
 
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
-    CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename) {
+    CAMB(const CosmologicalParameters<CoordinateType> &cosmology,
+         const std::string &filename,
+         CoordinateType targetRedshift = static_cast<CoordinateType>(isocurvature_redshift)) {
       readLinesFromCambOutput(filename);
       for (auto i = speciesToInterpolationPoints.begin(); i != speciesToInterpolationPoints.end(); ++i) {
         this->speciesToTransferFunction[i->first].initialise(kInterpolationPoints, i->second);
       }
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
+      setIsocurvatureRedshift(cosmology, targetRedshift);
+    }
 
-      // Backscale transfer-function amplitudes from z=0 to isocurvature_redshift for alpha coefficient calculation.
+    void setIsocurvatureRedshift(const CosmologicalParameters<CoordinateType> &cosmology,
+                                 CoordinateType targetRedshift) {
+      // Backscale transfer-function amplitudes from z=0 to targetRedshift for alpha coefficient calculation.
       CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));
-      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, static_cast<CoordinateType>(isocurvature_redshift)));
+      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, targetRedshift));
       isocurvatureTransferRescale = growthiso / growth0;
     }
 
