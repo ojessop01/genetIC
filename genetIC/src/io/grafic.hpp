@@ -65,6 +65,9 @@ namespace io {
       T fbaryon; //!< Omega_b / Omega_m
       T fc;    //!< Omega_cdm / Omega_m
 
+      // --- Isocurvature configuration ---
+      T isocurvatureTargetRedshift;
+
     public:
       /*! \brief Constructor
 
@@ -84,6 +87,7 @@ namespace io {
                    const particle::SpeciesToGeneratorMap<DataType> &particleGenerators,
                    const cosmology::CosmologicalParameters<T> &cosmology,
                    bool isocurvatureEnabled,
+                   const T targetRedshift,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -94,6 +98,7 @@ namespace io {
         cosmology(cosmology),
         pvarValue(pvarValue),
         set_isocurvature(isocurvatureEnabled),
+        isocurvatureTargetRedshift(targetRedshift),
         fbaryon(T(0)),
         fc(T(0)) {
 
@@ -175,13 +180,14 @@ namespace io {
         float alpha_iso = 0.0f;
         if (set_isocurvature) {
           alpha_iso = static_cast<float>(cosmology::isocurvature_alpha());
-        
+
           logging::entry()
             << "Isocurvature enabled: perturbing baryon and CDM density fields"
             << std::endl;
-        
+
           logging::entry()
             << "Using isocurvature alpha = " << alpha_iso
+            << " at target redshift z=" << isocurvatureTargetRedshift
             << std::endl;
         }
         
@@ -276,6 +282,7 @@ namespace io {
               multilevelgrid::MultiLevelGrid<DataType> &context,
               const cosmology::CosmologicalParameters<T> &cosmology,
               bool isocurvatureEnabled,
+              const T isocurvatureTargetRedshift,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -284,7 +291,7 @@ namespace io {
               std::vector<std::shared_ptr<fields::OutputField<DataType>>> &outputFields) {
 
       GraficOutput<DataType> output(filename, context, generators,
-                                    cosmology, isocurvatureEnabled, pvarValue,
+                                    cosmology, isocurvatureEnabled, isocurvatureTargetRedshift, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();
