@@ -189,6 +189,7 @@ namespace cosmology {
     mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
 
     CoordinateType isocurvatureTransferRescale; //!< Backscaling factor applied to transfer functions for alpha computation
+    CoordinateType isocurvatureTargetRedshift;  //!< Target redshift used for isocurvature transfer-function rescaling
 
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
@@ -200,9 +201,11 @@ namespace cosmology {
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
 
-      // Backscale transfer-function amplitudes from z=0 to isocurvature_redshift for alpha coefficient calculation.
+      isocurvatureTargetRedshift = static_cast<CoordinateType>(isocurvature_redshift);
+
+      // Backscale transfer-function amplitudes from z=0 to the configured target redshift for alpha coefficient calculation.
       CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));
-      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, static_cast<CoordinateType>(isocurvature_redshift)));
+      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, isocurvatureTargetRedshift));
       isocurvatureTransferRescale = growthiso / growth0;
     }
 
@@ -237,6 +240,9 @@ namespace cosmology {
      *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
      */
     CoordinateType calculateAlphaCoefficientDiscrete() const {
+      logging::entry() << "Calculating alpha coefficient with isocurvature transfer rescaled to z="
+                       << isocurvatureTargetRedshift << std::endl;
+
       auto it_c = speciesToInterpolationPoints.find(particle::species::dm);
       auto it_b = speciesToInterpolationPoints.find(particle::species::baryon);
       auto it_m = speciesToInterpolationPoints.find(particle::species::all);
