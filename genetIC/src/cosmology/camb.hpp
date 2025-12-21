@@ -27,7 +27,10 @@ namespace cosmology {
   inline double isocurvature_redshift = 99.0;
 
   // Isocurvature baryon-CDM correlation coefficient used for Grafic output
-  inline double isocurvature_alpha = -0.0049;
+  inline double &isocurvature_alpha() {
+    static double alpha = -0.0049;
+    return alpha;
+  }
 
   /* \class CacheKeyComparator
    * Comparison class for pair<weak_ptr<...>,...>, using owner_less comparison on the weak_ptr
@@ -212,7 +215,7 @@ namespace cosmology {
       isocurvatureTransferRescale = growthiso / growth0;
 
       const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
-      isocurvature_alpha = static_cast<double>(alpha);
+      isocurvature_alpha() = static_cast<double>(alpha);
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {

@@ -188,7 +188,7 @@ namespace io {
 
               if (set_isocurvature) {
                 // delta_bc = alpha * delta_m
-                const float deltabc = static_cast<float>(cosmology::isocurvature_alpha) * deltam;
+                const float deltabc = static_cast<float>(cosmology::isocurvature_alpha()) * deltam;
               
                 // Modify gas density by (1 + fb * delta_bc)
                 deltab = deltam * (1.0f + static_cast<float>(fc) * deltabc);
