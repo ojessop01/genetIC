@@ -2,7 +2,8 @@
 #include <src/simulation/particles/multilevelgenerator.hpp>
 #include <src/simulation/multilevelgrid/mask.hpp>
 #include "src/tools/memmap.hpp"
-#include "src/cosmology/camb.hpp"
+#include "src/cosmology/isocurvature.hpp"
+#include "src/cosmology/parameters.hpp"
 #include <memory>
 #include <vector>
 #include <algorithm>

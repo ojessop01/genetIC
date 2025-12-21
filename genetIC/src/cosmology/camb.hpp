@@ -7,6 +7,7 @@
 #include <map>
 
 
+#include "src/cosmology/isocurvature.hpp"
 #include "src/cosmology/parameters.hpp"
 #include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
@@ -22,15 +23,6 @@
     The input transfer function is tied to CAMB format.
  */
 namespace cosmology {
-
-  // Redshift at which the isocurvature mode is defined
-  inline double isocurvature_redshift = 99.0;
-
-  // Isocurvature baryon-CDM correlation coefficient used for Grafic output
-  inline double &isocurvature_alpha() {
-    static double alpha = -0.0049;
-    return alpha;
-  }
 
   /* \class CacheKeyComparator
    * Comparison class for pair<weak_ptr<...>,...>, using owner_less comparison on the weak_ptr
