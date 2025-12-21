@@ -2,6 +2,7 @@
 #include <src/simulation/particles/multilevelgenerator.hpp>
 #include <src/simulation/multilevelgrid/mask.hpp>
 #include "src/tools/memmap.hpp"
+#include "src/cosmology/camb.hpp"
 #include <memory>
 #include <vector>
 #include <algorithm>
@@ -11,9 +12,6 @@
 
 namespace io {
   namespace grafic {
-
-    // Global isocurvature coefficient, available throughout this namespace
-    inline constexpr double alpha = -0.0049;
 
     /*! \namespace io::grafic
         \brief Classes to handle output of particles in the grafic format.
@@ -187,10 +185,10 @@ namespace io {
               float deltab = deltam;
               float deltac = deltam;
               float massc = fc;
-              
+
               if (set_isocurvature) {
                 // delta_bc = alpha * delta_m
-                const float deltabc = alpha * deltam;
+                const float deltabc = static_cast<float>(cosmology::isocurvature_alpha) * deltam;
               
                 // Modify gas density by (1 + fb * delta_bc)
                 deltab = deltam * (1.0f + static_cast<float>(fc) * deltabc);
