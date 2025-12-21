@@ -297,6 +297,12 @@ public:
     }
   }
 
+  //! Set the redshift used when rescaling isocurvature transfer functions
+  void setIsocurvatureTargetRedshift(T targetRedshift) {
+    cosmology::isocurvature_redshift = targetRedshift;
+    logging::entry() << "Isocurvature transfer functions rescaled to target redshift z=" << targetRedshift << endl;
+  }
+
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.
   void setBaryonsOnAllLevels() {
