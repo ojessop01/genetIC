@@ -6,8 +6,6 @@
 #include <utility>
 #include <map>
 
-
-//#include "src/cosmology/isocurvature.hpp"
 #include "src/cosmology/parameters.hpp"
 #include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
@@ -23,8 +21,6 @@
     The input transfer function is tied to CAMB format.
  */
 namespace cosmology {
-
-  static double isocurvature_redshift = 0.0;
 
   /* \class CacheKeyComparator
    * Comparison class for pair<weak_ptr<...>,...>, using owner_less comparison on the weak_ptr
@@ -201,7 +197,7 @@ namespace cosmology {
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
 
-      isocurvatureTargetRedshift = static_cast<CoordinateType>(isocurvature_redshift);
+      isocurvatureTargetRedshift = static_cast<CoordinateType>(cosmology::isocurvature_redshift);
 
       // Backscale transfer-function amplitudes from z=0 to the configured target redshift for alpha coefficient calculation.
       CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));

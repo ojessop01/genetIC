@@ -6,8 +6,6 @@
 #include <utility>
 #include <map>
 
-
-#include "src/cosmology/isocurvature.hpp"
 #include "src/cosmology/parameters.hpp"
 #include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
@@ -199,7 +197,7 @@ namespace cosmology {
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
 
-      isocurvatureTargetRedshift = static_cast<CoordinateType>(isocurvature_redshift);
+      isocurvatureTargetRedshift = static_cast<CoordinateType>(cosmology::isocurvature_redshift);
 
       // Backscale transfer-function amplitudes from z=0 to the configured target redshift for alpha coefficient calculation.
       CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));

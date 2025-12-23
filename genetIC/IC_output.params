@@ -1,10 +1,14 @@
-# genetIC v1.5.0, compiled: Dec 21 2025, 22:09:12
-#                  runtime: Dec 21 2025, 22:15:44
+# genetIC v1.5.0, compiled: Dec 22 2025, 21:19:28
+#                  runtime: Dec 22 2025, 21:22:39
 
-# git HEAD:29bf0a7
+# git HEAD:f2c8dff
 # At the time of compilation, the following files had been modified:
-#   genetIC
-#   src/cosmology/isocurvature.hpp
+#   IC_output.params
+#   genetIC_mapper
+#   src/cosmology/.ipynb_checkpoints/camb-checkpoint.hpp
+#   src/cosmology/camb.hpp
+#   src/io/.ipynb_checkpoints/grafic-checkpoint.hpp
+#   src/io/grafic.hpp
 #   
 ob 0.0494 
 om 0.3158 
@@ -12,20 +16,15 @@ ol 0.6842
 s8 0.8117 
 ns 0.966 
 hubble 0.6732 
-z 200 
+z 127 
 camb planck_2018_transfer_out.dat 
 random_seed 8896131 
 isocurvature true 
-target_redshift 100 
+target_redshift 50 
 outname test 
-outdir ./ 
+outdir /home/kbgj57/genetIC/example/iso/ 
 outformat grafic 
-base_grid 50 128 
-centre 32.5 32.5 32.5 
-select_sphere 6 
-zoom_grid 3 128 
+base_grid 50 256 
 done 
 dump_ps 0 
 dump_ps 1 
-dump_grid 0 
-dump_grid 1 
