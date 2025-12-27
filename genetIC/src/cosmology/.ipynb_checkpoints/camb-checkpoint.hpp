@@ -171,6 +171,7 @@ namespace cosmology {
   protected:
     std::vector<double> kInterpolationPoints; //!< Wavenumbers read from CAMB file
     std::map<particle::species, std::vector<double>> speciesToInterpolationPoints; //!< Vector to store transfer functions
+    std::vector<double> vbvcInterpolationPoints; //!< Transfer function for baryon-CDM relative velocity (vb-vc)
 
     const std::map<particle::species, size_t> speciesToCambColumn
       {{particle::species::dm, 1},
@@ -184,9 +185,6 @@ namespace cosmology {
     CoordinateType ns;        //!< tensor to scalar ratio of the initial power spectrum
     mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
 
-    CoordinateType isocurvatureTransferRescale; //!< Backscaling factor applied to transfer functions for alpha computation
-    CoordinateType isocurvatureTargetRedshift;  //!< Target redshift used for isocurvature transfer-function rescaling
-
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
     CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename) {
@@ -197,15 +195,13 @@ namespace cosmology {
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
 
-      isocurvatureTargetRedshift = static_cast<CoordinateType>(cosmology::isocurvature_redshift);
-
-      // Backscale transfer-function amplitudes from z=0 to the configured target redshift for alpha coefficient calculation.
-      CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));
-      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, isocurvatureTargetRedshift));
-      isocurvatureTransferRescale = growthiso / growth0;
-
       const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
       isocurvature_alpha() = static_cast<double>(alpha);
+
+      if (!vbvcInterpolationPoints.empty()) {
+        const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
+        vbvc_variance() = static_cast<double>(vbvc);
+      }
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
@@ -240,8 +236,8 @@ namespace cosmology {
      */
     CoordinateType calculateAlphaCoefficientDiscrete() const {
       logging::entry()
-        << "Calculating alpha coefficient with baryon, CDM, and matter transfers "
-        << "backscaled to z=" << isocurvatureTargetRedshift << std::endl;
+        << "Calculating alpha coefficient with baryon, CDM, and matter transfers at z=0"
+        << std::endl;
     
       auto it_c = speciesToInterpolationPoints.find(particle::species::dm);
       auto it_b = speciesToInterpolationPoints.find(particle::species::baryon);
@@ -271,8 +267,6 @@ namespace cosmology {
         );
       }
     
-      const CoordinateType g = isocurvatureTransferRescale;
-    
       CoordinateType num = 0;
       CoordinateType den = 0;
     
@@ -284,14 +278,14 @@ namespace cosmology {
     
         const CoordinateType dlnk = std::log(k2 / k1);
     
-        const CoordinateType Tb1 = g * static_cast<CoordinateType>(Tb[i]);
-        const CoordinateType Tb2 = g * static_cast<CoordinateType>(Tb[i + 1]);
-    
-        const CoordinateType Tc1 = g * static_cast<CoordinateType>(Tc[i]);
-        const CoordinateType Tc2 = g * static_cast<CoordinateType>(Tc[i + 1]);
-    
-        const CoordinateType Tm1 = g * static_cast<CoordinateType>(Tm[i]);
-        const CoordinateType Tm2 = g * static_cast<CoordinateType>(Tm[i + 1]);
+        const CoordinateType Tb1 = static_cast<CoordinateType>(Tb[i]);
+        const CoordinateType Tb2 = static_cast<CoordinateType>(Tb[i + 1]);
+
+        const CoordinateType Tc1 = static_cast<CoordinateType>(Tc[i]);
+        const CoordinateType Tc2 = static_cast<CoordinateType>(Tc[i + 1]);
+
+        const CoordinateType Tm1 = static_cast<CoordinateType>(Tm[i]);
+        const CoordinateType Tm2 = static_cast<CoordinateType>(Tm[i + 1]);
     
         const CoordinateType Tbc1 = Tb1 - Tc1;
         const CoordinateType Tbc2 = Tb2 - Tc2;
@@ -323,6 +317,71 @@ namespace cosmology {
       return alpha;
     }
 
+    /*!
+     * \brief Compute variance of the baryon-CDM relative velocity transfer (vb-vc).
+     *
+     * Using the same primordial scaling as the rest of this class:
+     *   P_vbvc(k) ∝ amplitude * k^{ns} T_vbvc(k)^2
+     * and isotropic measure d^3k = 4π k^2 dk, the variance is
+     *
+     *   sigma_vbvc^2 = amplitude / (2π^2) ∫ dk k^{ns+2} T_vbvc(k)^2 .
+     *
+     * We evaluate the integral with a trapezoidal rule in ln k:
+     *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
+     */
+    CoordinateType calculateVbVcVarianceDiscrete() const {
+      logging::entry()
+        << "Calculating vb-vc variance from CAMB transfer functions at z=0"
+        << std::endl;
+
+      if (vbvcInterpolationPoints.empty()) {
+        throw std::runtime_error(
+          "Cannot compute vb-vc variance: required CAMB transfer column is missing."
+        );
+      }
+
+      const auto &kcamb = kInterpolationPoints;
+      const auto &Tvbvc = vbvcInterpolationPoints;
+
+      size_t n = kcamb.size();
+      if (Tvbvc.size() < n) n = Tvbvc.size();
+
+      if (n < 2) {
+        throw std::runtime_error(
+          "Cannot compute vb-vc variance: CAMB transfer table has insufficient points."
+        );
+      }
+
+      CoordinateType sum = 0;
+      for (size_t i = 0; i + 1 < n; ++i) {
+        const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i]);
+        const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1]);
+
+        if (k1 <= 0 || k2 <= 0) continue;
+
+        const CoordinateType dlnk = std::log(k2 / k1);
+
+        const CoordinateType T1 = static_cast<CoordinateType>(Tvbvc[i]);
+        const CoordinateType T2 = static_cast<CoordinateType>(Tvbvc[i + 1]);
+
+        const CoordinateType w1 = std::pow(k1, ns + 3);
+        const CoordinateType w2 = std::pow(k2, ns + 3);
+
+        const CoordinateType f1 = w1 * T1 * T1;
+        const CoordinateType f2 = w2 * T2 * T2;
+
+        sum += static_cast<CoordinateType>(0.5) * (f1 + f2) * dlnk;
+      }
+
+      const CoordinateType variance = amplitude * sum /
+        (static_cast<CoordinateType>(2) * M_PI * M_PI);
+
+      logging::entry()
+        << "Computed vb-vc variance = " << variance << std::endl;
+
+      return variance;
+    }
+
 
 
   protected:
@@ -332,10 +391,12 @@ namespace cosmology {
       void readLinesFromCambOutput(std::string filename) {
         kInterpolationPoints.clear();
         speciesToInterpolationPoints.clear();
+        vbvcInterpolationPoints.clear();
 
         // Dealing with the update of the CAMB TF output. Both are kept for backward compatibility.
         const int c_old_camb = 7; // number of columns in camb transfer function pre 2015
         const int c_new_camb = 13; // number of columns in camb transfer function post 2015
+        const int vbvc_column_index = 12; // 13th column (1-based) for vb-vc in post-2015 CAMB output
         int numCols;
         size_t j;
 
@@ -367,6 +428,11 @@ namespace cosmology {
             kInterpolationPoints.push_back(CoordinateType(input[numCols * j]));
             for (auto i = speciesToCambColumn.begin(); i != speciesToCambColumn.end(); ++i) {
               speciesToInterpolationPoints[i->first].push_back(CoordinateType(input[numCols * j + i->second]) / transferNormalisation);
+            }
+            if (numCols == c_new_camb) {
+              vbvcInterpolationPoints.push_back(
+                CoordinateType(input[numCols * j + vbvc_column_index]) / transferNormalisation
+              );
             }
           } else continue;
         }

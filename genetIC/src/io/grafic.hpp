@@ -2,7 +2,6 @@
 #include <src/simulation/particles/multilevelgenerator.hpp>
 #include <src/simulation/multilevelgrid/mask.hpp>
 #include "src/tools/memmap.hpp"
-#include "src/cosmology/isocurvature.hpp"
 #include "src/cosmology/parameters.hpp"
 #include <memory>
 #include <vector>
@@ -155,7 +154,6 @@ namespace io {
         "ic_deltac","ic_massc", "ic_particle_ids"
         };
 
-
         std::vector<tools::MemMapFileWriter> files;
 
         for (const auto &name : filenames) {
@@ -177,11 +175,8 @@ namespace io {
 
         // Log once, outside the OpenMP region
         float alpha_iso = 0.0f;
-        float vbvc_var = 0.0f;
         if (set_isocurvature) {
           alpha_iso = static_cast<float>(cosmology::isocurvature_alpha());
-          vbvc_var = static_cast<float>(cosmology::vbvc_variance());
-          (void)vbvc_var;
 
           // logging::entry()
           //   << "Isocurvature enabled: perturbing baryon and CDM density fields"

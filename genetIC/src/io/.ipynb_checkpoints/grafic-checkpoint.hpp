@@ -2,7 +2,6 @@
 #include <src/simulation/particles/multilevelgenerator.hpp>
 #include <src/simulation/multilevelgrid/mask.hpp>
 #include "src/tools/memmap.hpp"
-//#include "src/cosmology/isocurvature.hpp"
 #include "src/cosmology/parameters.hpp"
 #include <memory>
 #include <vector>
@@ -154,7 +153,6 @@ namespace io {
         "ic_deltab", "ic_refmap", "ic_pvar_00001",
         "ic_deltac","ic_massc", "ic_particle_ids"
         };
-
 
         std::vector<tools::MemMapFileWriter> files;
 

@@ -19,7 +19,6 @@
 #include "tools/filesystem.h"
 #include "io/numpy.hpp"
 #include "cosmology/parameters.hpp"
-#include "cosmology/isocurvature.hpp"
 #include "cosmology/camb.hpp"
 #include "simulation/window.hpp"
 #include "simulation/particles/species.hpp"

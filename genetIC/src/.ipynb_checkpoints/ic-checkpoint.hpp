@@ -155,7 +155,7 @@ protected:
 
   //! Enable isocurvature-specific mass fractions in grafic output, false by default
   bool isocurvatureEnabled = true;
-                                      
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -296,7 +296,6 @@ public:
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
     }
   }
-
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.
   void setBaryonsOnAllLevels() {
@@ -1344,7 +1343,8 @@ public:
         }
 
         grafic::save(getOutputPath() + ".grafic",
-                     pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled, pvarValue, centre,
+                     pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
+                     pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
       default:

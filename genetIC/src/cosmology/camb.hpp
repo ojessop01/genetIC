@@ -9,7 +9,6 @@
 #include "src/cosmology/parameters.hpp"
 #include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
-#include "src/cosmology/isocurvature.hpp"
 #include "src/simulation/particles/particle.hpp"
 #include "src/tools/logging.hpp"
 #include "src/tools/lru_cache.hpp"

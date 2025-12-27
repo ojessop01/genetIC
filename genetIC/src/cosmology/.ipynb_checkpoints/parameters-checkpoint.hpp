@@ -18,7 +18,7 @@ namespace cosmology {
   // initial seed (-0.0049) is overwritten as soon as CAMB computes the real
   // coefficient.
   inline double &isocurvature_alpha() {
-    static double alpha = 0;
+    static double alpha = -0.0049;
     return alpha;
   }
 
