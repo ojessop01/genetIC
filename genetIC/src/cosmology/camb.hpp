@@ -187,7 +187,8 @@ namespace cosmology {
 
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
-    CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename) {
+    CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename,
+         bool computeIsocurvature, bool computeVbvcVariance) {
       readLinesFromCambOutput(filename);
       for (auto i = speciesToInterpolationPoints.begin(); i != speciesToInterpolationPoints.end(); ++i) {
         this->speciesToTransferFunction[i->first].initialise(kInterpolationPoints, i->second);
@@ -195,13 +196,36 @@ namespace cosmology {
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
 
+      if (computeIsocurvature) {
+        const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
+        isocurvature_alpha() = static_cast<double>(alpha);
+      } else {
+        isocurvature_alpha() = 0.0;
+      }
+
+      if (computeVbvcVariance) {
+        if (!vbvcInterpolationPoints.empty()) {
+          const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
+          vbvc_variance() = static_cast<double>(vbvc);
+        }
+      } else {
+        vbvc_variance() = 0.0;
+      }
+    }
+
+    void computeIsocurvatureAlpha() const {
       const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
       isocurvature_alpha() = static_cast<double>(alpha);
+    }
 
-      if (!vbvcInterpolationPoints.empty()) {
-        const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
-        vbvc_variance() = static_cast<double>(vbvc);
+    void computeVbvcVariance() const {
+      if (vbvcInterpolationPoints.empty()) {
+        throw std::runtime_error(
+          "Cannot compute vb-vc variance: required CAMB transfer column is missing."
+        );
       }
+      const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
+      vbvc_variance() = static_cast<double>(vbvc);
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
