@@ -147,58 +147,12 @@ namespace io {
         std::string thisGridFilename = outputFilename + "_" + std::to_string(effective_size);
         mkdir(thisGridFilename.c_str(), 0777);
 
-          std::vector<std::string> filenames = {
-        // ----------------------
-        // CDM velocity components
-        // Stored in proper km/s. Used by RAMSES to initialise
-        // collisionless CDM particle peculiar velocities.
-        // ----------------------
+        std::vector<std::string> filenames = {
         "ic_velcx", "ic_velcy", "ic_velcz",
-
-        // ----------------------
-        // Baryon velocity components
-        // Also in proper km/s. These initialise the gas velocity
-        // field on the AMR grid. Needed if baryons do NOT follow
-        // CDM exactly (e.g. relative streaming, isocurvature, etc.).
-        // ----------------------
         "ic_velbx", "ic_velby", "ic_velbz",
-
-        // ----------------------
-        // CDM particle positions
-        // Given as comoving displacements (GrafIC / RAMSES convention).
-        // These define the CDM particle load.
-        // ----------------------
         "ic_poscx", "ic_poscy", "ic_poscz",
-
-        // ----------------------
-        // Scalar fields
-        //
-        // ic_deltab:
-        //   Baryon overdensity δ_b(x)       
-        // ic_refmap:
-        //   AMR refinement map. Integer mask telling RAMSES where to
-        //   enforce refinement at start-up.
-        //
-        // ic_pvar_00001:
-        //   Passive “pvar” field. Generic auxiliary scalar that can be
-        //   used for tagging, passive scalars, entropy-like quantities,
-        //   or experiment metadata. Meaning is pipeline-defined.
-        // ic_deltac:
-        //   CDM overdensity δ_c(x)
-        // ic_massc:
-        //   Spatially varying CDM mass fraction field:
-        //       f_c(x) = ρ_c(x) / ρ_m(x)
-        //   Used to adjust local CDM particle masses consistently with
-        //   δ_c and δ_m. Reduces to a uniform value if f_c is constant.
-        // ----------------------
         "ic_deltab", "ic_refmap", "ic_pvar_00001",
-        "ic_deltac","ic_massc",
-
-        // ----------------------
-        // Particle IDs
-        // Unique integer identifier for each CDM particle.
-        // ----------------------
-        "ic_particle_ids"
+        "ic_deltac","ic_massc", "ic_particle_ids"
         };
 
 
@@ -226,13 +180,13 @@ namespace io {
         if (set_isocurvature) {
           alpha_iso = static_cast<float>(cosmology::isocurvature_alpha());
 
-          logging::entry()
-            << "Isocurvature enabled: perturbing baryon and CDM density fields"
-            << std::endl;
+          // logging::entry()
+          //   << "Isocurvature enabled: perturbing baryon and CDM density fields"
+          //   << std::endl;
 
-          logging::entry()
-            << "Using isocurvature alpha = " << alpha_iso
-            << std::endl;
+          // logging::entry()
+          //   << "Using isocurvature alpha = " << alpha_iso
+          //   << std::endl;
         }
         
 #pragma omp parallel for

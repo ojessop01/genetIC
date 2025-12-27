@@ -1,14 +1,9 @@
-# genetIC v1.5.0, compiled: Dec 23 2025, 00:18:01
-#                  runtime: Dec 23 2025, 00:21:04
+# genetIC v1.5.0, compiled: Dec 27 2025, 15:16:17
+#                  runtime: Dec 27 2025, 15:19:06
 
-# git HEAD:f2c8dff
+# git HEAD:5b56911
 # At the time of compilation, the following files had been modified:
-#   IC_output.params
-#   genetIC_mapper
-#   src/cosmology/.ipynb_checkpoints/camb-checkpoint.hpp
-#   src/cosmology/camb.hpp
-#   src/io/.ipynb_checkpoints/grafic-checkpoint.hpp
-#   src/io/grafic.hpp
+#   genetIC
 #   
 ob 0.0494 
 om 0.3158 
