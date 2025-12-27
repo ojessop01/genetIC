@@ -186,6 +186,13 @@ namespace io {
           //   << "Using isocurvature alpha = " << alpha_iso
           //   << std::endl;
         }
+
+        // Apply a 1-sigma baryon-CDM relative velocity in +x by shifting CDM velocities.
+        float vbvcOffset = 0.0f;
+        const double vbvcVariance = cosmology::vbvc_variance();
+        if (vbvcVariance > 0.0) {
+          vbvcOffset = static_cast<float>(std::sqrt(vbvcVariance)) * velFactor;
+        }
         
 #pragma omp parallel for
         for (size_t i_y = 0; i_y < targetGrid.size; ++i_y) {
@@ -220,7 +227,7 @@ namespace io {
               
               size_t file_index = i_y * targetGrid.size + i_x;
 
-              float velcx = velScaled.x;
+              float velcx = velScaled.x - vbvcOffset;
               float velcy = velScaled.y;
               float velcz = velScaled.z;
 
