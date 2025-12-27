@@ -15,6 +15,13 @@ namespace cosmology {
     return alpha;
   }
 
+  // Variance of the baryon-CDM relative velocity field (vb-vc) computed from
+  // the CAMB transfer-function table.
+  inline double &vbvc_variance() {
+    static double variance = 0.0;
+    return variance;
+  }
+
 } // namespace cosmology
 
 #endif

@@ -9,6 +9,7 @@
 #include "src/cosmology/parameters.hpp"
 #include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
+#include "src/cosmology/isocurvature.hpp"
 #include "src/simulation/particles/particle.hpp"
 #include "src/tools/logging.hpp"
 #include "src/tools/lru_cache.hpp"
@@ -171,6 +172,7 @@ namespace cosmology {
   protected:
     std::vector<double> kInterpolationPoints; //!< Wavenumbers read from CAMB file
     std::map<particle::species, std::vector<double>> speciesToInterpolationPoints; //!< Vector to store transfer functions
+    std::vector<double> vbvcInterpolationPoints; //!< Transfer function for baryon-CDM relative velocity (vb-vc)
 
     const std::map<particle::species, size_t> speciesToCambColumn
       {{particle::species::dm, 1},
@@ -196,6 +198,11 @@ namespace cosmology {
 
       const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
       isocurvature_alpha() = static_cast<double>(alpha);
+
+      if (!vbvcInterpolationPoints.empty()) {
+        const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
+        vbvc_variance() = static_cast<double>(vbvc);
+      }
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
@@ -311,6 +318,71 @@ namespace cosmology {
       return alpha;
     }
 
+    /*!
+     * \brief Compute variance of the baryon-CDM relative velocity transfer (vb-vc).
+     *
+     * Using the same primordial scaling as the rest of this class:
+     *   P_vbvc(k) ∝ amplitude * k^{ns} T_vbvc(k)^2
+     * and isotropic measure d^3k = 4π k^2 dk, the variance is
+     *
+     *   sigma_vbvc^2 = amplitude / (2π^2) ∫ dk k^{ns+2} T_vbvc(k)^2 .
+     *
+     * We evaluate the integral with a trapezoidal rule in ln k:
+     *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
+     */
+    CoordinateType calculateVbVcVarianceDiscrete() const {
+      logging::entry()
+        << "Calculating vb-vc variance from CAMB transfer functions at z=0"
+        << std::endl;
+
+      if (vbvcInterpolationPoints.empty()) {
+        throw std::runtime_error(
+          "Cannot compute vb-vc variance: required CAMB transfer column is missing."
+        );
+      }
+
+      const auto &kcamb = kInterpolationPoints;
+      const auto &Tvbvc = vbvcInterpolationPoints;
+
+      size_t n = kcamb.size();
+      if (Tvbvc.size() < n) n = Tvbvc.size();
+
+      if (n < 2) {
+        throw std::runtime_error(
+          "Cannot compute vb-vc variance: CAMB transfer table has insufficient points."
+        );
+      }
+
+      CoordinateType sum = 0;
+      for (size_t i = 0; i + 1 < n; ++i) {
+        const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i]);
+        const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1]);
+
+        if (k1 <= 0 || k2 <= 0) continue;
+
+        const CoordinateType dlnk = std::log(k2 / k1);
+
+        const CoordinateType T1 = static_cast<CoordinateType>(Tvbvc[i]);
+        const CoordinateType T2 = static_cast<CoordinateType>(Tvbvc[i + 1]);
+
+        const CoordinateType w1 = std::pow(k1, ns + 3);
+        const CoordinateType w2 = std::pow(k2, ns + 3);
+
+        const CoordinateType f1 = w1 * T1 * T1;
+        const CoordinateType f2 = w2 * T2 * T2;
+
+        sum += static_cast<CoordinateType>(0.5) * (f1 + f2) * dlnk;
+      }
+
+      const CoordinateType variance = amplitude * sum /
+        (static_cast<CoordinateType>(2) * M_PI * M_PI);
+
+      logging::entry()
+        << "Computed vb-vc variance = " << variance << std::endl;
+
+      return variance;
+    }
+
 
 
   protected:
@@ -320,10 +392,12 @@ namespace cosmology {
       void readLinesFromCambOutput(std::string filename) {
         kInterpolationPoints.clear();
         speciesToInterpolationPoints.clear();
+        vbvcInterpolationPoints.clear();
 
         // Dealing with the update of the CAMB TF output. Both are kept for backward compatibility.
         const int c_old_camb = 7; // number of columns in camb transfer function pre 2015
         const int c_new_camb = 13; // number of columns in camb transfer function post 2015
+        const int vbvc_column_index = 12; // 13th column (1-based) for vb-vc in post-2015 CAMB output
         int numCols;
         size_t j;
 
@@ -355,6 +429,11 @@ namespace cosmology {
             kInterpolationPoints.push_back(CoordinateType(input[numCols * j]));
             for (auto i = speciesToCambColumn.begin(); i != speciesToCambColumn.end(); ++i) {
               speciesToInterpolationPoints[i->first].push_back(CoordinateType(input[numCols * j + i->second]) / transferNormalisation);
+            }
+            if (numCols == c_new_camb) {
+              vbvcInterpolationPoints.push_back(
+                CoordinateType(input[numCols * j + vbvc_column_index]) / transferNormalisation
+              );
             }
           } else continue;
         }
