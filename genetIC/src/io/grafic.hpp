@@ -64,6 +64,10 @@ namespace io {
       T fbaryon; //!< Omega_b / Omega_m
       T fc;    //!< Omega_cdm / Omega_m
 
+      // --- vb-vc relative velocity settings ---
+      bool applyVbvcVelocity; //!< Apply vb-vc velocity perturbation to CDM velocities.
+      int vbvcAxis; //!< Axis (0=x,1=y,2=z) along which to apply vb-vc perturbation.
+
     public:
       /*! \brief Constructor
 
@@ -83,6 +87,8 @@ namespace io {
                    const particle::SpeciesToGeneratorMap<DataType> &particleGenerators,
                    const cosmology::CosmologicalParameters<T> &cosmology,
                    bool isocurvatureEnabled,
+                   bool applyVbvcVelocity,
+                   int vbvcAxis,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -93,6 +99,8 @@ namespace io {
         cosmology(cosmology),
         pvarValue(pvarValue),
         set_isocurvature(isocurvatureEnabled),
+        applyVbvcVelocity(applyVbvcVelocity),
+        vbvcAxis(vbvcAxis),
         fbaryon(T(0)),
         fc(T(0)) {
 
@@ -187,11 +195,13 @@ namespace io {
           //   << std::endl;
         }
 
-        // Apply a 1-sigma baryon-CDM relative velocity in +x by shifting CDM velocities.
+        // Apply a 1-sigma baryon-CDM relative velocity by shifting CDM velocities.
         float vbvcOffset = 0.0f;
-        const double vbvcVariance = cosmology::vbvc_variance();
-        if (vbvcVariance > 0.0) {
-          vbvcOffset = static_cast<float>(std::sqrt(vbvcVariance)) * velFactor;
+        if (applyVbvcVelocity) {
+          const double vbvcVariance = cosmology::vbvc_variance();
+          if (vbvcVariance > 0.0) {
+            vbvcOffset = static_cast<float>(std::sqrt(vbvcVariance)) * velFactor;
+          }
         }
         
 #pragma omp parallel for
@@ -227,9 +237,18 @@ namespace io {
               
               size_t file_index = i_y * targetGrid.size + i_x;
 
-              float velcx = velScaled.x - vbvcOffset;
+              float velcx = velScaled.x;
               float velcy = velScaled.y;
               float velcz = velScaled.z;
+              if (applyVbvcVelocity && vbvcOffset != 0.0f) {
+                if (vbvcAxis == 0) {
+                  velcx -= vbvcOffset;
+                } else if (vbvcAxis == 1) {
+                  velcy -= vbvcOffset;
+                } else if (vbvcAxis == 2) {
+                  velcz -= vbvcOffset;
+                }
+              }
 
               float velbx = velScaled.x;
               float velby = velScaled.y;
@@ -303,6 +322,8 @@ namespace io {
               multilevelgrid::MultiLevelGrid<DataType> &context,
               const cosmology::CosmologicalParameters<T> &cosmology,
               bool isocurvatureEnabled,
+              bool applyVbvcVelocity,
+              int vbvcAxis,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -311,7 +332,8 @@ namespace io {
               std::vector<std::shared_ptr<fields::OutputField<DataType>>> &outputFields) {
 
       GraficOutput<DataType> output(filename, context, generators,
-                                    cosmology, isocurvatureEnabled, pvarValue,
+                                    cosmology, isocurvatureEnabled,
+                                    applyVbvcVelocity, vbvcAxis, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();

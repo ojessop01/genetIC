@@ -156,6 +156,12 @@ protected:
   //! Enable isocurvature-specific mass fractions in grafic output, false by default
   bool isocurvatureEnabled = true;
 
+  //! Enable vb-vc velocity perturbation in grafic output.
+  bool applyVbvcVelocity = false;
+
+  //! Axis for vb-vc velocity perturbation in grafic output (0=x,1=y,2=z).
+  int vbvcAxis = 0;
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -294,6 +300,36 @@ public:
       logging::entry() << "Isocurvature-specific Grafic mass fractions: disabled" << endl;
     } else {
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set whether to apply vb-vc velocity perturbation in grafic output
+  void setVbvcVelocity(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->applyVbvcVelocity = true;
+      logging::entry() << "Grafic vb-vc velocity perturbation: enabled" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->applyVbvcVelocity = false;
+      logging::entry() << "Grafic vb-vc velocity perturbation: disabled" << endl;
+    } else {
+      throw std::runtime_error("vbvc_velocity flag must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set axis along which to apply vb-vc velocity perturbation in grafic output
+  void setVbvcAxis(std::string axis) {
+    std::transform(axis.begin(), axis.end(), axis.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (axis == "x" || axis == "0") {
+      vbvcAxis = 0;
+    } else if (axis == "y" || axis == "1") {
+      vbvcAxis = 1;
+    } else if (axis == "z" || axis == "2") {
+      vbvcAxis = 2;
+    } else {
+      throw std::runtime_error("vbvc_axis must be x, y, z (or 0, 1, 2)");
     }
   }
 
@@ -1344,6 +1380,7 @@ public:
 
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
+                     applyVbvcVelocity, vbvcAxis,
                      pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
