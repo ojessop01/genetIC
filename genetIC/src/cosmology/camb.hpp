@@ -184,9 +184,6 @@ namespace cosmology {
     CoordinateType ns;        //!< tensor to scalar ratio of the initial power spectrum
     mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
 
-    CoordinateType isocurvatureTransferRescale; //!< Backscaling factor applied to transfer functions for alpha computation
-    CoordinateType isocurvatureTargetRedshift;  //!< Target redshift used for isocurvature transfer-function rescaling
-
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
     CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename) {
@@ -196,13 +193,6 @@ namespace cosmology {
       }
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
-
-      isocurvatureTargetRedshift = static_cast<CoordinateType>(cosmology::isocurvature_redshift);
-
-      // Backscale transfer-function amplitudes from z=0 to the configured target redshift for alpha coefficient calculation.
-      CoordinateType growth0 = growthFactor(cosmologyAtRedshift(cosmology, 0));
-      CoordinateType growthiso = growthFactor(cosmologyAtRedshift(cosmology, isocurvatureTargetRedshift));
-      isocurvatureTransferRescale = growthiso / growth0;
 
       const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
       isocurvature_alpha() = static_cast<double>(alpha);
@@ -240,8 +230,8 @@ namespace cosmology {
      */
     CoordinateType calculateAlphaCoefficientDiscrete() const {
       logging::entry()
-        << "Calculating alpha coefficient with baryon, CDM, and matter transfers "
-        << "backscaled to z=" << isocurvatureTargetRedshift << std::endl;
+        << "Calculating alpha coefficient with baryon, CDM, and matter transfers at z=0"
+        << std::endl;
     
       auto it_c = speciesToInterpolationPoints.find(particle::species::dm);
       auto it_b = speciesToInterpolationPoints.find(particle::species::baryon);
@@ -271,8 +261,6 @@ namespace cosmology {
         );
       }
     
-      const CoordinateType g = isocurvatureTransferRescale;
-    
       CoordinateType num = 0;
       CoordinateType den = 0;
     
@@ -284,14 +272,14 @@ namespace cosmology {
     
         const CoordinateType dlnk = std::log(k2 / k1);
     
-        const CoordinateType Tb1 = g * static_cast<CoordinateType>(Tb[i]);
-        const CoordinateType Tb2 = g * static_cast<CoordinateType>(Tb[i + 1]);
-    
-        const CoordinateType Tc1 = g * static_cast<CoordinateType>(Tc[i]);
-        const CoordinateType Tc2 = g * static_cast<CoordinateType>(Tc[i + 1]);
-    
-        const CoordinateType Tm1 = g * static_cast<CoordinateType>(Tm[i]);
-        const CoordinateType Tm2 = g * static_cast<CoordinateType>(Tm[i + 1]);
+        const CoordinateType Tb1 = static_cast<CoordinateType>(Tb[i]);
+        const CoordinateType Tb2 = static_cast<CoordinateType>(Tb[i + 1]);
+
+        const CoordinateType Tc1 = static_cast<CoordinateType>(Tc[i]);
+        const CoordinateType Tc2 = static_cast<CoordinateType>(Tc[i + 1]);
+
+        const CoordinateType Tm1 = static_cast<CoordinateType>(Tm[i]);
+        const CoordinateType Tm2 = static_cast<CoordinateType>(Tm[i + 1]);
     
         const CoordinateType Tbc1 = Tb1 - Tc1;
         const CoordinateType Tbc2 = Tb2 - Tc2;

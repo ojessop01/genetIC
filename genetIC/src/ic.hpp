@@ -157,9 +157,6 @@ protected:
   //! Enable isocurvature-specific mass fractions in grafic output, false by default
   bool isocurvatureEnabled = true;
 
-  //! Target redshift for isocurvature transfer function rescaling
-  T isocurvatureTargetRedshift = 0.0;
-                                      
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -300,14 +297,6 @@ public:
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
     }
   }
-
-  //! Set the redshift used when rescaling isocurvature transfer functions
-  void setIsocurvatureTargetRedshift(T targetRedshift) {
-    isocurvatureTargetRedshift = targetRedshift;
-    cosmology::isocurvature_redshift = targetRedshift;
-    logging::entry() << "Isocurvature transfer functions rescaled to target redshift z=" << targetRedshift << endl;
-  }
-
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.
   void setBaryonsOnAllLevels() {
@@ -1356,7 +1345,7 @@ public:
 
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
-                     isocurvatureTargetRedshift, pvarValue, centre,
+                     pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
       default:

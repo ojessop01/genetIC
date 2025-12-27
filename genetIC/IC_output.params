@@ -20,7 +20,6 @@ z 127
 camb planck_2018_transfer_out.dat 
 random_seed 8896131 
 isocurvature true 
-target_redshift 50 
 outname test 
 outdir /home/kbgj57/genetIC/example/iso/ 
 outformat grafic 
