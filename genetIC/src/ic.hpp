@@ -295,8 +295,13 @@ public:
     if (flag == "1" || flag == "true" || flag == "on") {
       this->isocurvatureEnabled = true;
       logging::entry() << "Isocurvature-specific Grafic mass fractions: enabled" << endl;
+      auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
+      if (cambSpectrum != nullptr) {
+        cambSpectrum->computeIsocurvatureAlpha();
+      }
     } else if (flag == "0" || flag == "false" || flag == "off") {
       this->isocurvatureEnabled = false;
+      cosmology::isocurvature_alpha() = 0.0;
       logging::entry() << "Isocurvature-specific Grafic mass fractions: disabled" << endl;
     } else {
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
@@ -310,8 +315,13 @@ public:
     if (flag == "1" || flag == "true" || flag == "on") {
       this->applyVbvcVelocity = true;
       logging::entry() << "Grafic vb-vc velocity perturbation: enabled" << endl;
+      auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
+      if (cambSpectrum != nullptr) {
+        cambSpectrum->computeVbvcVariance();
+      }
     } else if (flag == "0" || flag == "false" || flag == "off") {
       this->applyVbvcVelocity = false;
+      cosmology::vbvc_variance() = 0.0;
       logging::entry() << "Grafic vb-vc velocity perturbation: disabled" << endl;
     } else {
       throw std::runtime_error("vbvc_velocity flag must be true/false (or 1/0)");
@@ -780,7 +790,9 @@ public:
   * \param cambFieldPath - string of path to CAMB file
   */
   void setCambDat(std::string cambFilePath) {
-    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath);
+    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath,
+                                                               isocurvatureEnabled,
+                                                               applyVbvcVelocity);
     this->multiLevelContext.setPowerspectrumGenerator(*spectrum);
   }
 
