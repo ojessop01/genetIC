@@ -162,6 +162,9 @@ protected:
   //! Axis for vb-vc velocity perturbation in grafic output (0=x,1=y,2=z).
   int vbvcAxis = 0;
 
+  //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
+  bool writeExtraGraficFields = false;
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -340,6 +343,21 @@ public:
       vbvcAxis = 2;
     } else {
       throw std::runtime_error("vbvc_axis must be x, y, z (or 0, 1, 2)");
+    }
+  }
+
+  //! Set whether to always write extra grafic fields (developer mode)
+  void setWriteExtraGraficFields(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->writeExtraGraficFields = true;
+      logging::entry() << "Grafic extra fields: enabled" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->writeExtraGraficFields = false;
+      logging::entry() << "Grafic extra fields: disabled" << endl;
+    } else {
+      throw std::runtime_error("write_extra_grafic_fields must be true/false (or 1/0)");
     }
   }
 
@@ -1392,7 +1410,7 @@ public:
 
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
-                     applyVbvcVelocity, vbvcAxis,
+                     applyVbvcVelocity, vbvcAxis, writeExtraGraficFields,
                      pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;

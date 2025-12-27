@@ -68,6 +68,7 @@ namespace io {
       // --- vb-vc relative velocity settings ---
       bool applyVbvcVelocity; //!< Apply vb-vc velocity perturbation to CDM velocities.
       int vbvcAxis; //!< Axis (0=x,1=y,2=z) along which to apply vb-vc perturbation.
+      bool writeExtraGraficFields; //!< Always write extra fields even if features are disabled.
 
     public:
       /*! \brief Constructor
@@ -90,6 +91,7 @@ namespace io {
                    bool isocurvatureEnabled,
                    bool applyVbvcVelocity,
                    int vbvcAxis,
+                   bool writeExtraGraficFields,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -102,6 +104,7 @@ namespace io {
         set_isocurvature(isocurvatureEnabled),
         applyVbvcVelocity(applyVbvcVelocity),
         vbvcAxis(vbvcAxis),
+        writeExtraGraficFields(writeExtraGraficFields),
         fbaryon(T(0)),
         fc(T(0)) {
 
@@ -166,22 +169,24 @@ namespace io {
         const size_t velcxIndex = addFloatFile("ic_velcx");
         const size_t velcyIndex = addFloatFile("ic_velcy");
         const size_t velczIndex = addFloatFile("ic_velcz");
+        const bool writeBaryonVelocities = applyVbvcVelocity || writeExtraGraficFields;
         const std::optional<size_t> velbxIndex =
-          applyVbvcVelocity ? std::optional<size_t>(addFloatFile("ic_velbx")) : std::nullopt;
+          writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velbx")) : std::nullopt;
         const std::optional<size_t> velbyIndex =
-          applyVbvcVelocity ? std::optional<size_t>(addFloatFile("ic_velby")) : std::nullopt;
+          writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velby")) : std::nullopt;
         const std::optional<size_t> velbzIndex =
-          applyVbvcVelocity ? std::optional<size_t>(addFloatFile("ic_velbz")) : std::nullopt;
+          writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velbz")) : std::nullopt;
         const size_t poscxIndex = addFloatFile("ic_poscx");
         const size_t poscyIndex = addFloatFile("ic_poscy");
         const size_t posczIndex = addFloatFile("ic_poscz");
         const size_t deltabIndex = addFloatFile("ic_deltab");
         const size_t refmapIndex = addFloatFile("ic_refmap");
         const size_t pvarIndex = addFloatFile("ic_pvar_00001");
+        const bool writeIsocurvatureFields = set_isocurvature || writeExtraGraficFields;
         const std::optional<size_t> deltacIndex =
-          set_isocurvature ? std::optional<size_t>(addFloatFile("ic_deltac")) : std::nullopt;
+          writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_deltac")) : std::nullopt;
         const std::optional<size_t> masscIndex =
-          set_isocurvature ? std::optional<size_t>(addFloatFile("ic_massc")) : std::nullopt;
+          writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_massc")) : std::nullopt;
 
         const std::string idFilename = "ic_particle_ids";
 
@@ -354,6 +359,7 @@ namespace io {
               bool isocurvatureEnabled,
               bool applyVbvcVelocity,
               int vbvcAxis,
+              bool writeExtraGraficFields,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -363,7 +369,7 @@ namespace io {
 
       GraficOutput<DataType> output(filename, context, generators,
                                     cosmology, isocurvatureEnabled,
-                                    applyVbvcVelocity, vbvcAxis, pvarValue,
+                                    applyVbvcVelocity, vbvcAxis, writeExtraGraficFields, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();
