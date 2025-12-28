@@ -185,6 +185,7 @@ namespace cosmology {
 
     std::map<particle::species, tools::numerics::LogInterpolator<double>> speciesToTransferFunction; //!< Interpolation functions:
     CoordinateType amplitude; //!< Amplitude of the initial power spectrum
+    CoordinateType amplitudeAtZ0; //!< Amplitude of the power spectrum at z=0
     CoordinateType ns;        //!< tensor to scalar ratio of the initial power spectrum
     mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
 
@@ -368,9 +369,7 @@ namespace cosmology {
       }
 
       constexpr auto h = 0.6732;
-      constexpr auto ScalarPivot = 0.05;
       constexpr auto SpeedOfLight = 299792.458;
-      constexpr auto ScalarAmplitude = 2.100549e-9;
       
       const auto &kcamb = kInterpolationPoints;
       const auto &Tvbvc = vbvcInterpolationPoints;
@@ -396,23 +395,21 @@ namespace cosmology {
         const CoordinateType T1 = static_cast<CoordinateType>(Tvbvc[i]);
         const CoordinateType T2 = static_cast<CoordinateType>(Tvbvc[i + 1]);
 
-        // Correct CAMB convention:
-        // integrand ~ k^3 * |T_vbc|^2 * (k/kp)^(ns-1)
+        // Transfer functions are already divided by 1/k^2, so
+        // integrand ~ k^{ns+3} * |T_vbc|^2 in ln k.
         const CoordinateType f1 =
-            std::pow(k1, 3) *
-            std::pow(k1 / ScalarPivot, ns - 1) *
+            std::pow(k1, ns + 3) *
             (T1 * T1);
     
         const CoordinateType f2 =
-            std::pow(k2, 3) *
-            std::pow(k2 / ScalarPivot, ns - 1) *
+            std::pow(k2, ns + 3) *
             (T2 * T2);
     
         sum += static_cast<CoordinateType>(0.5) * (f1 + f2) * dlnk;
       }
     
       const CoordinateType variance =
-          ScalarAmplitude * sum / (static_cast<CoordinateType>(2) * M_PI * M_PI);
+          amplitudeAtZ0 * sum / (static_cast<CoordinateType>(2) * M_PI * M_PI);
     
       const CoordinateType sigma =
           (variance > 0) ? std::sqrt(variance) * SpeedOfLight : 0;
@@ -512,8 +509,8 @@ namespace cosmology {
         CoordinateType linearRenorm = (cosmology.sigma8 / sigma8PreNormalization);
         CoordinateType linearRenormFactor = linearRenorm * growthFactorNormalized;
         
-        CoordinateType linearRenormAmplitude = linearRenorm * linearRenorm;
-        logging::entry() << "Recomputed power spectrum amplitude = " << linearRenormAmplitude << std::endl;
+        amplitudeAtZ0 = linearRenorm * linearRenorm;
+        logging::entry() << "Recomputed power spectrum amplitude = " << amplitudeAtZ0 << std::endl;
         CoordinateType PrimordialAmplitude = ScalarAmplitude * std::pow(ScalarPivot, 1 - ns);
 
         amplitude = linearRenormFactor * linearRenormFactor;
