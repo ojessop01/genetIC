@@ -84,6 +84,7 @@ namespace io {
           \param input_mask - masks used on each level.
           \param outFields - vector of output overdensity fields (needed for baryon output).
       */
+    
       GraficOutput(const std::string &fname,
                    multilevelgrid::MultiLevelGrid<DataType> &levelContext,
                    const particle::SpeciesToGeneratorMap<DataType> &particleGenerators,
@@ -120,11 +121,24 @@ namespace io {
         lengthFactorDisplacements = 1.; // Mpc a h^-1 expected.
         velFactor = std::pow(cosmology.scalefactor, 0.5f); // Gadget km s^-1 a^1/2 -> GrafIC km s^-1
 
+        // if (set_isocurvature) {
+        //   alpha_iso = static_cast<float>(cosmology::isocurvature_alpha());
+
+        //   logging::entry()
+        //     << "Isocurvature enabled: perturbing baryon and CDM density fields"
+        //     << std::endl;
+
+        //   logging::entry()
+        //     << "Using isocurvature alpha = " << alpha_iso
+        //     << std::endl;
+        // }
+        
         const T OmegaM0 = cosmology.OmegaM0;
         const T OmegaB0 = cosmology.OmegaBaryons0;
 
         fbaryon = OmegaB0 / OmegaM0;
         fc    = (OmegaM0 - OmegaB0) / OmegaM0;
+        
       }
 
       //! \brief Output particles on all levels
@@ -231,7 +245,7 @@ namespace io {
         if (applyVbvcVelocity) {
           const double vbvcVariance = cosmology::vbvc_variance();
           if (vbvcVariance > 0.0) {
-            vbvcOffset = static_cast<float>(std::sqrt(vbvcVariance)) * velFactor;
+            vbvcOffset = static_cast<float>(vbvcVariance);
           }
         }
         
@@ -347,9 +361,8 @@ namespace io {
         header.h0 = cosmology.hubble * 100;
         return header;
       }
-
     };
-
+    
     //! \brief Save all grids in the given multi-level context, in grafic format.
     template<typename DataType, typename T=tools::datatypes::strip_complex<DataType>>
     void save(const std::string &filename,

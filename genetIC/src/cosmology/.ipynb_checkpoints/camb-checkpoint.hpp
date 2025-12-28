@@ -36,6 +36,9 @@ namespace cosmology {
   };
 
   size_t lru_cache_size = 10;
+  
+  // speed of light in km/s
+  //inline constexpr double SpeedOfLight = 299792.458;
 
   /*! \class PowerSpectrum
   * \brief Abstract base class for power spectrum calculations.
@@ -187,7 +190,8 @@ namespace cosmology {
 
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
-    CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename) {
+    CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename,
+         bool computeIsocurvature, bool computeVbvcVariance) {
       readLinesFromCambOutput(filename);
       for (auto i = speciesToInterpolationPoints.begin(); i != speciesToInterpolationPoints.end(); ++i) {
         this->speciesToTransferFunction[i->first].initialise(kInterpolationPoints, i->second);
@@ -195,13 +199,36 @@ namespace cosmology {
       ns = cosmology.ns;
       calculateOverallNormalization(cosmology);
 
+      if (computeIsocurvature) {
+        const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
+        isocurvature_alpha() = static_cast<double>(alpha);
+      } else {
+        isocurvature_alpha() = 0.0;
+      }
+
+      if (computeVbvcVariance) {
+        if (!vbvcInterpolationPoints.empty()) {
+          const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
+          vbvc_variance() = static_cast<double>(vbvc);
+        }
+      } else {
+        vbvc_variance() = 0.0;
+      }
+    }
+
+    void computeIsocurvatureAlpha() const {
       const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
       isocurvature_alpha() = static_cast<double>(alpha);
+    }
 
-      if (!vbvcInterpolationPoints.empty()) {
-        const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
-        vbvc_variance() = static_cast<double>(vbvc);
+    void computeVbvcVariance() const {
+      if (vbvcInterpolationPoints.empty()) {
+        throw std::runtime_error(
+          "Cannot compute vb-vc variance: required CAMB transfer column is missing."
+        );
       }
+      const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
+      vbvc_variance() = static_cast<double>(vbvc);
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
@@ -340,6 +367,11 @@ namespace cosmology {
         );
       }
 
+      constexpr auto h = 0.6732;
+      constexpr auto ScalarPivot = 0.05;
+      constexpr auto SpeedOfLight = 299792.458;
+      constexpr auto ScalarAmplitude = 2.100549e-9;
+      
       const auto &kcamb = kInterpolationPoints;
       const auto &Tvbvc = vbvcInterpolationPoints;
 
@@ -354,8 +386,8 @@ namespace cosmology {
 
       CoordinateType sum = 0;
       for (size_t i = 0; i + 1 < n; ++i) {
-        const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i]);
-        const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1]);
+        const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i] * h);
+        const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1] * h);
 
         if (k1 <= 0 || k2 <= 0) continue;
 
@@ -364,25 +396,32 @@ namespace cosmology {
         const CoordinateType T1 = static_cast<CoordinateType>(Tvbvc[i]);
         const CoordinateType T2 = static_cast<CoordinateType>(Tvbvc[i + 1]);
 
-        const CoordinateType w1 = std::pow(k1, ns + 3);
-        const CoordinateType w2 = std::pow(k2, ns + 3);
-
-        const CoordinateType f1 = w1 * T1 * T1;
-        const CoordinateType f2 = w2 * T2 * T2;
-
+        // Correct CAMB convention:
+        // integrand ~ k^3 * |T_vbc|^2 * (k/kp)^(ns-1)
+        const CoordinateType f1 =
+            std::pow(k1, 3) *
+            std::pow(k1 / ScalarPivot, ns - 1) *
+            (T1 * T1);
+    
+        const CoordinateType f2 =
+            std::pow(k2, 3) *
+            std::pow(k2 / ScalarPivot, ns - 1) *
+            (T2 * T2);
+    
         sum += static_cast<CoordinateType>(0.5) * (f1 + f2) * dlnk;
       }
-
-      const CoordinateType variance = amplitude * sum /
-        (static_cast<CoordinateType>(2) * M_PI * M_PI);
-
+    
+      const CoordinateType variance =
+          ScalarAmplitude * sum / (static_cast<CoordinateType>(2) * M_PI * M_PI);
+    
+      const CoordinateType sigma =
+          (variance > 0) ? std::sqrt(variance) * SpeedOfLight : 0;
+    
       logging::entry()
-        << "Computed vb-vc variance = " << variance << std::endl;
-
-      return variance;
-    }
-
-
+        << "Computed vb-vc sigma = " << sigma << " km/s" << std::endl;
+    
+      return sigma;
+    }        
 
   protected:
 
@@ -431,7 +470,7 @@ namespace cosmology {
             }
             if (numCols == c_new_camb) {
               vbvcInterpolationPoints.push_back(
-                CoordinateType(input[numCols * j + vbvc_column_index]) / transferNormalisation
+                CoordinateType(input[numCols * j + vbvc_column_index])
               );
             }
           } else continue;
@@ -461,12 +500,25 @@ namespace cosmology {
 
       //! Return the cosmology-dependent part of the normalisation of the power spectrum.
       void calculateOverallNormalization(const CosmologicalParameters<CoordinateType> &cosmology) {
+        constexpr auto h = 0.6732;
+        constexpr auto ScalarPivot = 0.05;
+        constexpr auto SpeedOfLight = 299792.458;
+        constexpr auto ScalarAmplitude = 2.100549e-9;
+  
+          
         CoordinateType ourGrowthFactor = growthFactor(cosmology);
         CoordinateType growthFactorNormalized = ourGrowthFactor / growthFactor(cosmologyAtRedshift(cosmology, 0));
         CoordinateType sigma8PreNormalization = calculateLinearVarianceInSphere(8.);
-        CoordinateType linearRenormFactor = (cosmology.sigma8 / sigma8PreNormalization) * growthFactorNormalized;
+        CoordinateType linearRenorm = (cosmology.sigma8 / sigma8PreNormalization);
+        CoordinateType linearRenormFactor = linearRenorm * growthFactorNormalized;
+        
+        CoordinateType linearRenormAmplitude = linearRenorm * linearRenorm;
+        logging::entry() << "Recomputed power spectrum amplitude = " << linearRenormAmplitude << std::endl;
+        CoordinateType PrimordialAmplitude = ScalarAmplitude * std::pow(ScalarPivot, 1 - ns);
 
         amplitude = linearRenormFactor * linearRenormFactor;
+        logging::entry() << "Recomputed backscaled power spectrum amplitude = " << amplitude << std::endl;
+        
       }
     
       //! Compute the variance in a spherical top hat window
