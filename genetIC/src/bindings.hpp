@@ -59,6 +59,9 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     dispatch.add_class_route("center_output", &ICType::setCenteringOnRegion);
 
     dispatch.add_class_route("isocurvature", &ICType::setIsocurvature);
+    dispatch.add_class_route("vbvc_velocity", &ICType::setVbvcVelocity);
+    dispatch.add_class_route("vbvc_axis", &ICType::setVbvcAxis);
+    dispatch.add_class_route("write_extra_grafic_fields", &ICType::setWriteExtraGraficFields);
     // Gadget options
     dispatch.add_class_route("gadget_particle_type", &ICType::setGadgetParticleType);
     dispatch.add_class_route("gadget_flagged_particle_type", &ICType::setFlaggedGadgetParticleType);

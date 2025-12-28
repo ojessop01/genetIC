@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <string>
 #include <cmath>
+#include <optional>
 #include "src/simulation/particles/species.hpp"
 
 namespace io {
@@ -64,6 +65,11 @@ namespace io {
       T fbaryon; //!< Omega_b / Omega_m
       T fc;    //!< Omega_cdm / Omega_m
 
+      // --- vb-vc relative velocity settings ---
+      bool applyVbvcVelocity; //!< Apply vb-vc velocity perturbation to CDM velocities.
+      int vbvcAxis; //!< Axis (0=x,1=y,2=z) along which to apply vb-vc perturbation.
+      bool writeExtraGraficFields; //!< Always write extra fields even if features are disabled.
+
     public:
       /*! \brief Constructor
 
@@ -78,11 +84,15 @@ namespace io {
           \param input_mask - masks used on each level.
           \param outFields - vector of output overdensity fields (needed for baryon output).
       */
+    
       GraficOutput(const std::string &fname,
                    multilevelgrid::MultiLevelGrid<DataType> &levelContext,
                    const particle::SpeciesToGeneratorMap<DataType> &particleGenerators,
                    const cosmology::CosmologicalParameters<T> &cosmology,
                    bool isocurvatureEnabled,
+                   bool applyVbvcVelocity,
+                   int vbvcAxis,
+                   bool writeExtraGraficFields,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -93,6 +103,9 @@ namespace io {
         cosmology(cosmology),
         pvarValue(pvarValue),
         set_isocurvature(isocurvatureEnabled),
+        applyVbvcVelocity(applyVbvcVelocity),
+        vbvcAxis(vbvcAxis),
+        writeExtraGraficFields(writeExtraGraficFields),
         fbaryon(T(0)),
         fc(T(0)) {
 
@@ -108,11 +121,24 @@ namespace io {
         lengthFactorDisplacements = 1.; // Mpc a h^-1 expected.
         velFactor = std::pow(cosmology.scalefactor, 0.5f); // Gadget km s^-1 a^1/2 -> GrafIC km s^-1
 
+        // if (set_isocurvature) {
+        //   alpha_iso = static_cast<float>(cosmology::isocurvature_alpha());
+
+        //   logging::entry()
+        //     << "Isocurvature enabled: perturbing baryon and CDM density fields"
+        //     << std::endl;
+
+        //   logging::entry()
+        //     << "Using isocurvature alpha = " << alpha_iso
+        //     << std::endl;
+        // }
+        
         const T OmegaM0 = cosmology.OmegaM0;
         const T OmegaB0 = cosmology.OmegaBaryons0;
 
         fbaryon = OmegaB0 / OmegaM0;
         fc    = (OmegaM0 - OmegaB0) / OmegaM0;
+        
       }
 
       //! \brief Output particles on all levels
@@ -146,31 +172,58 @@ namespace io {
         std::string thisGridFilename = outputFilename + "_" + std::to_string(effective_size);
         mkdir(thisGridFilename.c_str(), 0777);
 
-        std::vector<std::string> filenames = {
-        "ic_velcx", "ic_velcy", "ic_velcz",
-        "ic_velbx", "ic_velby", "ic_velbz",
-        "ic_poscx", "ic_poscy", "ic_poscz",
-        "ic_deltab", "ic_refmap", "ic_pvar_00001",
-        "ic_deltac","ic_massc", "ic_particle_ids"
+        std::vector<std::string> floatFilenames;
+        floatFilenames.reserve(14);
+
+        auto addFloatFile = [&floatFilenames](const std::string &name) {
+          floatFilenames.push_back(name);
+          return floatFilenames.size() - 1;
         };
+
+        const size_t velcxIndex = addFloatFile("ic_velcx");
+        const size_t velcyIndex = addFloatFile("ic_velcy");
+        const size_t velczIndex = addFloatFile("ic_velcz");
+        const bool writeBaryonVelocities = applyVbvcVelocity || writeExtraGraficFields;
+        const std::optional<size_t> velbxIndex =
+          writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velbx")) : std::nullopt;
+        const std::optional<size_t> velbyIndex =
+          writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velby")) : std::nullopt;
+        const std::optional<size_t> velbzIndex =
+          writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velbz")) : std::nullopt;
+        const size_t poscxIndex = addFloatFile("ic_poscx");
+        const size_t poscyIndex = addFloatFile("ic_poscy");
+        const size_t posczIndex = addFloatFile("ic_poscz");
+        const size_t deltabIndex = addFloatFile("ic_deltab");
+        const size_t refmapIndex = addFloatFile("ic_refmap");
+        const size_t pvarIndex = addFloatFile("ic_pvar_00001");
+        const bool writeIsocurvatureFields = set_isocurvature || writeExtraGraficFields;
+        const std::optional<size_t> deltacIndex =
+          writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_deltac")) : std::nullopt;
+        const std::optional<size_t> masscIndex =
+          writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_massc")) : std::nullopt;
+
+        const std::string idFilename = "ic_particle_ids";
 
         std::vector<tools::MemMapFileWriter> files;
 
-        for (const auto &name : filenames) {
+        for (const auto &name : floatFilenames) {
           files.emplace_back(thisGridFilename + "/" + name);
           writeHeaderForGrid(files.back(), targetGrid);
         }
+        tools::MemMapFileWriter idFile(thisGridFilename + "/" + idFilename);
+        writeHeaderForGrid(idFile, targetGrid);
 
         
         for (size_t i_z = 0; i_z < targetGrid.size; ++i_z) {
           pb.tick();
 
           std::vector<tools::MemMapRegion<float>> varMaps;
-          for (int m = 0; m < 14; ++m)
+          for (size_t m = 0; m < floatFilenames.size(); ++m) {
             varMaps.push_back(files[m].getMemMapFortran<float>(targetGrid.size2));
+          }
 
           tools::MemMapRegion<size_t> idMap =
-            files[14].getMemMapFortran<size_t>(targetGrid.size2);
+            idFile.getMemMapFortran<size_t>(targetGrid.size2);
 
 
         // Log once, outside the OpenMP region
@@ -185,6 +238,15 @@ namespace io {
           // logging::entry()
           //   << "Using isocurvature alpha = " << alpha_iso
           //   << std::endl;
+        }
+
+        // Apply a 1-sigma baryon-CDM relative velocity by shifting CDM velocities.
+        float vbvcOffset = 0.0f;
+        if (applyVbvcVelocity) {
+          const double vbvcVariance = cosmology::vbvc_variance();
+          if (vbvcVariance > 0.0) {
+            vbvcOffset = static_cast<float>(vbvcVariance);
+          }
         }
         
 #pragma omp parallel for
@@ -223,32 +285,45 @@ namespace io {
               float velcx = velScaled.x;
               float velcy = velScaled.y;
               float velcz = velScaled.z;
+              if (applyVbvcVelocity && vbvcOffset != 0.0f) {
+                if (vbvcAxis == 0) {
+                  velcx -= vbvcOffset;
+                } else if (vbvcAxis == 1) {
+                  velcy -= vbvcOffset;
+                } else if (vbvcAxis == 2) {
+                  velcz -= vbvcOffset;
+                }
+              }
 
               float velbx = velScaled.x;
               float velby = velScaled.y;
               float velbz = velScaled.z;
 
               // CDM velocities
-              varMaps[0][file_index] = velcx;
-              varMaps[1][file_index] = velcy;
-              varMaps[2][file_index] = velcz;
+              varMaps[velcxIndex][file_index] = velcx;
+              varMaps[velcyIndex][file_index] = velcy;
+              varMaps[velczIndex][file_index] = velcz;
 
               // Baryon velocities
-              varMaps[3][file_index] = velbx;
-              varMaps[4][file_index] = velby;
-              varMaps[5][file_index] = velbz;
+              if (velbxIndex) {
+                varMaps[*velbxIndex][file_index] = velbx;
+                varMaps[*velbyIndex][file_index] = velby;
+                varMaps[*velbzIndex][file_index] = velbz;
+              }
 
               // CDM Positions
-              varMaps[6][file_index] = posScaled.x;
-              varMaps[7][file_index] = posScaled.y;
-              varMaps[8][file_index] = posScaled.z;
+              varMaps[poscxIndex][file_index] = posScaled.x;
+              varMaps[poscyIndex][file_index] = posScaled.y;
+              varMaps[posczIndex][file_index] = posScaled.z;
 
               // Scalar Fields
-              varMaps[9][file_index]  = deltab;
-              varMaps[10][file_index] = maskVal;
-              varMaps[11][file_index] = pvar;
-              varMaps[12][file_index] = deltac;
-              varMaps[13][file_index] = massc;
+              varMaps[deltabIndex][file_index] = deltab;
+              varMaps[refmapIndex][file_index] = maskVal;
+              varMaps[pvarIndex][file_index] = pvar;
+              if (deltacIndex) {
+                varMaps[*deltacIndex][file_index] = deltac;
+                varMaps[*masscIndex][file_index] = massc;
+              }
 
               // CDM particle IDs
               idMap[file_index] = global_index;
@@ -286,9 +361,8 @@ namespace io {
         header.h0 = cosmology.hubble * 100;
         return header;
       }
-
     };
-
+    
     //! \brief Save all grids in the given multi-level context, in grafic format.
     template<typename DataType, typename T=tools::datatypes::strip_complex<DataType>>
     void save(const std::string &filename,
@@ -296,6 +370,9 @@ namespace io {
               multilevelgrid::MultiLevelGrid<DataType> &context,
               const cosmology::CosmologicalParameters<T> &cosmology,
               bool isocurvatureEnabled,
+              bool applyVbvcVelocity,
+              int vbvcAxis,
+              bool writeExtraGraficFields,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -304,7 +381,8 @@ namespace io {
               std::vector<std::shared_ptr<fields::OutputField<DataType>>> &outputFields) {
 
       GraficOutput<DataType> output(filename, context, generators,
-                                    cosmology, isocurvatureEnabled, pvarValue,
+                                    cosmology, isocurvatureEnabled,
+                                    applyVbvcVelocity, vbvcAxis, writeExtraGraficFields, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();
