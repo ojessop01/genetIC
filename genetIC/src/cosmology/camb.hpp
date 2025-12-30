@@ -2,16 +2,19 @@
 #define _CAMB_HPP_INCLUDED
 
 #include <cmath>
+#include <complex>
+#include <limits>
+#include <map>
 #include <memory>
 #include <utility>
-#include <map>
+#include <vector>
 
 #include "src/cosmology/parameters.hpp"
-#include "src/tools/numerics/interpolation.hpp"
 #include "src/io/input.hpp"
 #include "src/simulation/particles/particle.hpp"
 #include "src/tools/logging.hpp"
 #include "src/tools/lru_cache.hpp"
+#include "src/tools/numerics/interpolation.hpp"
 
 /*!
     \namespace cosmology
@@ -31,21 +34,17 @@ namespace cosmology {
     bool operator()(const F &a, const F &b) const {
       return std::owner_less<typename F::first_type>()(a.first, b.first) ||
              (!std::owner_less<typename F::first_type>()(b.first, a.first) && a.second < b.second);
-
     }
   };
 
   size_t lru_cache_size = 10;
-  
-  // speed of light in km/s
-  //inline constexpr double SpeedOfLight = 299792.458;
 
   /*! \class PowerSpectrum
-  * \brief Abstract base class for power spectrum calculations.
-  *
-  * For practical runs, the CAMB child class performs the key work. For testing runs, a
-  * PowerLawPowerSpectrum implementation is also provided.
-  */
+   * \brief Abstract base class for power spectrum calculations.
+   *
+   * For practical runs, the CAMB child class performs the key work. For testing runs, a
+   * PowerLawPowerSpectrum implementation is also provided.
+   */
   template<typename DataType>
   class PowerSpectrum {
   public:
@@ -53,19 +52,14 @@ namespace cosmology {
     using FieldType = fields::Field<DataType, CoordinateType>;
 
   protected:
-
-    using CacheKeyType = std::pair<std::weak_ptr<const grids::Grid<CoordinateType>>, particle::species>;
-
-    //! A cache for previously calculated covariances. The key is a pair: (weak pointer to the grid, transfer fn)
-    // mutable std::map<CacheKeyType, std::shared_ptr<FieldType>,
-    //  CacheKeyComparator<CacheKeyType>> calculatedCovariancesCache;
+    using CacheKeyType =
+      std::pair<std::weak_ptr<const grids::Grid<CoordinateType>>, particle::species>;
 
     mutable tools::lru_cache<CacheKeyType,
       std::shared_ptr<FieldType>,
       CacheKeyComparator<CacheKeyType>> calculatedCovariancesCache{lru_cache_size};
 
   public:
-
     virtual ~PowerSpectrum() = default;
 
     //! \brief Evaluate power spectrum for a given species at wavenumber k (Mpc/h), including the normalisation
@@ -77,13 +71,16 @@ namespace cosmology {
     getPowerSpectrumForGrid(const std::shared_ptr<const grids::Grid<CoordinateType>> &grid,
                             particle::species transferType = particle::species::dm) const {
 
-      if(transferType == particle::species::whitenoise)
+      if (transferType == particle::species::whitenoise) {
         return nullptr;
+      }
 
-      if(lru_cache_size==0)
+      if (lru_cache_size == 0) {
         return getPowerSpectrumForGridUncached(grid, transferType);
+      }
 
-      auto cacheKey = std::make_pair(std::weak_ptr<const grids::Grid<CoordinateType>>(grid), transferType);
+      auto cacheKey =
+        std::make_pair(std::weak_ptr<const grids::Grid<CoordinateType>>(grid), transferType);
 
       auto result = this->calculatedCovariancesCache.get(cacheKey);
 
@@ -106,37 +103,32 @@ namespace cosmology {
 
       auto P = std::make_shared<fields::Field<DataType, CoordinateType>>(*grid, true);
 
-      P->forEachFourierCell([norm, this, transferType]
-                              (std::complex<CoordinateType>, CoordinateType kx, CoordinateType ky,
-                               CoordinateType kz) {
-        CoordinateType k = sqrt(kx * kx + ky * ky + kz * kz);
-        auto spec = std::complex<CoordinateType>((*this)(k, transferType) * norm, 0);
-        return spec;
-      });
+      P->forEachFourierCell(
+        [norm, this, transferType](std::complex<CoordinateType>, CoordinateType kx,
+                                  CoordinateType ky, CoordinateType kz) {
+          CoordinateType k = std::sqrt(kx * kx + ky * ky + kz * kz);
+          auto spec = std::complex<CoordinateType>((*this)(k, transferType) * norm, 0);
+          return spec;
+        });
 
       return P;
-
     }
 
   public:
-
     //! Return the box- and fft-dependent part of the normalisation of the power spectrum
-    static CoordinateType getPowerSpectrumNormalizationForGrid(const grids::Grid<CoordinateType> &grid) {
+    static CoordinateType
+    getPowerSpectrumNormalizationForGrid(const grids::Grid<CoordinateType> &grid) {
 
       CoordinateType kw = 2. * M_PI / grid.thisGridSize;
-      CoordinateType norm = kw * kw * kw / pow(2.f * M_PI, 3.f); //since kw=2pi/L, this is just 1/V_box
+      CoordinateType norm =
+        kw * kw * kw / std::pow(static_cast<CoordinateType>(2) * M_PI,
+                               static_cast<CoordinateType>(3)); // 1/V_box
 
-      // This factor Ncells was first needed when FFT normalisation changed from 1/N to 1/sqrt(N). This knowledge was previously
-      // incorporated as a normalisation of the random draw rather than to the power spectrum. It makes more sense to have
-      // it as a PS normalisation and restores coherence between the P(k) estimated from the field (e.g. delta dagger * delta)
-      // and the theoretical P(k) calculated here. MR 2018
+      // FFT normalisation factor
       CoordinateType fft_normalisation = grid.size3;
 
       return norm * fft_normalisation;
     }
-
-
-
   };
 
   /*! \class PowerLawPowerSpectrum
@@ -152,53 +144,66 @@ namespace cosmology {
     CoordinateType amplitude;
 
   public:
-    PowerLawPowerSpectrum(const CosmologicalParameters<CoordinateType> &cosmology, CoordinateType amplitude)
-    : ns(cosmology.ns), amplitude(amplitude) { }
+    PowerLawPowerSpectrum(const CosmologicalParameters<CoordinateType> &cosmology,
+                          CoordinateType amplitude)
+      : ns(cosmology.ns), amplitude(amplitude) {}
 
-    CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
-      if(k==0)
+    CoordinateType operator()(CoordinateType k, particle::species) const override {
+      if (k == 0) {
         return 0;
-      else
-        return amplitude * pow(k, ns);
+      }
+      return amplitude * std::pow(k, ns);
     }
-
   };
 
   /*! \class CAMB
-  * \brief Provides power spectra by using transfer functions from CAMB output
-  */
+   * \brief Provides power spectra by using transfer functions from CAMB output
+   */
   template<typename DataType>
   class CAMB : public PowerSpectrum<DataType> {
     using typename PowerSpectrum<DataType>::CoordinateType;
 
   protected:
+    // Store the cosmology so redshift (and any other fields) are accessible everywhere.
+    CosmologicalParameters<CoordinateType> cosmology_;
+
     std::vector<double> kInterpolationPoints; //!< Wavenumbers read from CAMB file
-    std::map<particle::species, std::vector<double>> speciesToInterpolationPoints; //!< Vector to store transfer functions
-    std::vector<double> vbvcInterpolationPoints; //!< Transfer function for baryon-CDM relative velocity (vb-vc)
+    std::map<particle::species, std::vector<double>>
+      speciesToInterpolationPoints; //!< Vector to store transfer functions
+    std::vector<double>
+      vbvcInterpolationPoints; //!< Transfer function for baryon-CDM relative velocity (vb-vc)
 
-    const std::map<particle::species, size_t> speciesToCambColumn
-      {{particle::species::dm, 1},
-       {particle::species::baryon, 2},
-       {particle::species::all, 6 // if using a single transfer function, use the column for total
-     }};
-      //!< Columns of CAMB that we request for DM and baryons respectively
+    const std::map<particle::species, size_t> speciesToCambColumn{
+      {particle::species::dm, 1},
+      {particle::species::baryon, 2},
+      {particle::species::all, 6} // if using a single transfer function, use the column for total
+    };
+    //!< Columns of CAMB that we request for DM and baryons respectively
 
-    std::map<particle::species, tools::numerics::LogInterpolator<double>> speciesToTransferFunction; //!< Interpolation functions:
-    CoordinateType amplitude; //!< Amplitude of the initial power spectrum
-    CoordinateType amplitudeAtZ0; //!< Amplitude of the power spectrum at z=0
-    CoordinateType ns;        //!< tensor to scalar ratio of the initial power spectrum
-    mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber. If too small compared to grid resolution, Meszaros solution will be computed
+    std::map<particle::species, tools::numerics::LogInterpolator<double>>
+      speciesToTransferFunction; //!< Interpolation functions
+
+    CoordinateType amplitude;       //!< Amplitude of the initial power spectrum
+    CoordinateType linearAmplitude; //!< Amplitude of the initial power spectrum
+    CoordinateType ns;              //!< scalar spectral index of the initial power spectrum
+
+    mutable CoordinateType kcamb_max_in_file; //!< Maximum CAMB wavenumber
 
   public:
     //! Import data from CAMB file and initialise the interpolation functions used to compute the transfer functions:
     CAMB(const CosmologicalParameters<CoordinateType> &cosmology, const std::string &filename,
-         bool computeIsocurvature, bool computeVbvcVariance) {
+         bool computeIsocurvature, bool computeVbvcVariance)
+      : cosmology_(cosmology) {
+
       readLinesFromCambOutput(filename);
-      for (auto i = speciesToInterpolationPoints.begin(); i != speciesToInterpolationPoints.end(); ++i) {
+
+      for (auto i = speciesToInterpolationPoints.begin();
+           i != speciesToInterpolationPoints.end(); ++i) {
         this->speciesToTransferFunction[i->first].initialise(kInterpolationPoints, i->second);
       }
-      ns = cosmology.ns;
-      calculateOverallNormalization(cosmology);
+
+      ns = cosmology_.ns;
+      calculateOverallNormalization(cosmology_);
 
       if (computeIsocurvature) {
         const CoordinateType alpha = calculateAlphaCoefficientDiscrete();
@@ -225,58 +230,48 @@ namespace cosmology {
     void computeVbvcVariance() const {
       if (vbvcInterpolationPoints.empty()) {
         throw std::runtime_error(
-          "Cannot compute vb-vc variance: required CAMB transfer column is missing."
-        );
+          "Cannot compute vb-vc variance: required CAMB transfer column is missing. Ensure you are using post 2015 CAMB transfer function table");
       }
       const CoordinateType vbvc = calculateVbVcVarianceDiscrete();
       vbvc_variance() = static_cast<double>(vbvc);
     }
 
     CoordinateType operator()(CoordinateType k, particle::species transferType) const override {
-      CoordinateType linearTransfer;
-      if (k != 0)
-        linearTransfer = speciesToTransferFunction.at(transferType)(k);
-      else
-        linearTransfer = 0.0;
+      CoordinateType linearTransfer = 0.0;
 
-      if (k > kcamb_max_in_file) {
-        kcamb_max_in_file = std::numeric_limits<CoordinateType>().max();
+      if (k != 0) {
+        linearTransfer = speciesToTransferFunction.at(transferType)(k);
       }
 
-      return amplitude * pow(k, ns) * linearTransfer * linearTransfer;
+      if (k > kcamb_max_in_file) {
+        kcamb_max_in_file = std::numeric_limits<CoordinateType>::max();
+      }
+
+      return amplitude * std::pow(k, ns) * linearTransfer * linearTransfer;
     }
 
     /*!
-     * \brief Compute alpha = <δ_bc δ_m> / <δ_m^2> from the discrete CAMB transfer-function table.
+     * \brief Compute the baryon–CDM modulation coefficient
+     *        \f$\alpha = \langle \delta_{bc}\,\delta_m\rangle /
+     *                    \langle \delta_m^2 \rangle \f$
+     *        using the discrete CAMB transfer-function table.
      *
-     * We interpret:
-     *   T_bc(k) = T_b(k) - T_cdm(k)
-     *   T_m (k) = T_all(k)  (CAMB "total matter" column configured via particle::species::all)
-     *
-     * Using the same primordial scaling as the rest of this class:
-     *   P_ij(k) ∝ k^{ns} T_i(k) T_j(k)
-     * and isotropic measure d^3k = 4π k^2 dk, the common constants cancel, giving
-     *
-     *   alpha = ∫ dk k^{ns+2} T_bc(k) T_m(k) / ∫ dk k^{ns+2} T_m(k)^2 .
-     *
-     * We evaluate the integrals with a trapezoidal rule in ln k:
-     *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
+     * Physically, α measures the correlation between the baryon–CDM isocurvature
+     * mode and the total matter density
      */
     CoordinateType calculateAlphaCoefficientDiscrete() const {
-      logging::entry()
-        << "Calculating alpha coefficient with baryon, CDM, and matter transfers at z=0"
-        << std::endl;
     
+      // Retrieve CAMB transfer columns
       auto it_c = speciesToInterpolationPoints.find(particle::species::dm);
       auto it_b = speciesToInterpolationPoints.find(particle::species::baryon);
       auto it_m = speciesToInterpolationPoints.find(particle::species::all);
     
+      // Defensive: ensure all required species are present
       if (it_c == speciesToInterpolationPoints.end() ||
           it_b == speciesToInterpolationPoints.end() ||
           it_m == speciesToInterpolationPoints.end()) {
         throw std::runtime_error(
-          "Cannot compute alpha: required CAMB transfer columns (dm, baryon, all) are missing."
-        );
+          "Cannot compute alpha: required CAMB transfer columns (dm, baryon, all) are missing.");
       }
     
       const auto &kcamb = kInterpolationPoints;
@@ -284,6 +279,7 @@ namespace cosmology {
       const auto &Tb = it_b->second;
       const auto &Tm = it_m->second;
     
+      // Determine safe usable table length
       size_t n = kcamb.size();
       if (Tc.size() < n) n = Tc.size();
       if (Tb.size() < n) n = Tb.size();
@@ -291,191 +287,209 @@ namespace cosmology {
     
       if (n < 2) {
         throw std::runtime_error(
-          "Cannot compute alpha: CAMB transfer table has insufficient points."
-        );
+          "Cannot compute alpha: CAMB transfer table has insufficient points.");
       }
     
-      CoordinateType num = 0;
-      CoordinateType den = 0;
+      CoordinateType num = 0;  // numerator integral <δ_bc δ_m>
+      CoordinateType den = 0;  // denominator integral <δ_m^2>
     
       for (size_t i = 0; i + 1 < n; ++i) {
+    
         const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i]);
         const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1]);
     
+        // Physically meaningful only for positive k
         if (k1 <= 0 || k2 <= 0) continue;
     
+        // Logarithmic bin width in k
         const CoordinateType dlnk = std::log(k2 / k1);
     
-        const CoordinateType Tb1 = static_cast<CoordinateType>(Tb[i]);
-        const CoordinateType Tb2 = static_cast<CoordinateType>(Tb[i + 1]);
-
-        const CoordinateType Tc1 = static_cast<CoordinateType>(Tc[i]);
-        const CoordinateType Tc2 = static_cast<CoordinateType>(Tc[i + 1]);
-
+        // Baryon–CDM mode at each endpoint
+        const CoordinateType Tbc1 = static_cast<CoordinateType>(Tb[i] - Tc[i]);
+        const CoordinateType Tbc2 = static_cast<CoordinateType>(Tb[i + 1] - Tc[i + 1]);
+    
+        // Total matter mode
         const CoordinateType Tm1 = static_cast<CoordinateType>(Tm[i]);
         const CoordinateType Tm2 = static_cast<CoordinateType>(Tm[i + 1]);
     
-        const CoordinateType Tbc1 = Tb1 - Tc1;
-        const CoordinateType Tbc2 = Tb2 - Tc2;
+        // Cross spectra
+        const CoordinateType Pmbc1 = std::pow(k1, ns + 3) * Tbc1 * Tm1;
+        const CoordinateType Pmbc2 = std::pow(k2, ns + 3) * Tbc2 * Tm2;
     
-        const CoordinateType w1 = std::pow(k1, ns + 3);
-        const CoordinateType w2 = std::pow(k2, ns + 3);
+        const CoordinateType Pm1 = std::pow(k1, ns + 3) * Tm1 * Tm1;
+        const CoordinateType Pm2 = std::pow(k2, ns + 3) * Tm2 * Tm2;
     
-        const CoordinateType fnum1 = w1 * Tbc1 * Tm1;
-        const CoordinateType fnum2 = w2 * Tbc2 * Tm2;
-    
-        const CoordinateType fden1 = w1 * Tm1 * Tm1;
-        const CoordinateType fden2 = w2 * Tm2 * Tm2;
-    
-        num += static_cast<CoordinateType>(0.5) * (fnum1 + fnum2) * dlnk;
-        den += static_cast<CoordinateType>(0.5) * (fden1 + fden2) * dlnk;
+        // Trapezoidal accumulation in log–k
+        num += 0.5f * (Pmbc1 + Pmbc2) * dlnk;
+        den += 0.5f * (Pm1   + Pm2)   * dlnk;
       }
     
-      if (den == static_cast<CoordinateType>(0)) {
+      // Denominator must be strictly non-zero for meaningful alpha
+      if (den == 0.0f) {
         throw std::runtime_error(
-          "Cannot compute alpha: denominator integral is zero."
-        );
+          "Cannot compute alpha: denominator integral is zero.");
       }
     
       const CoordinateType alpha = num / den;
+
+      // ------------------------------------------------------------------
+      // Physical sanity checks for ΛCDM alpha.
+      // Expectation:
+      //   alpha < 0  (anti-correlation of δ_bc with δ_m)
+      //   |alpha| < 1  (bounded correlation strength)
+      // ------------------------------------------------------------------
+      if (!std::isfinite(alpha)) {
+        throw std::runtime_error("Cannot compute alpha: result is NaN or infinite.");
+      }
+      
+      // Small tolerance to allow rounding noise
+      constexpr CoordinateType eps = static_cast<CoordinateType>(1e-6);
+      
+      // Must be negative
+      if (alpha >= -eps) {
+        throw std::runtime_error(
+          "Computed alpha violates ΛCDM expectation: alpha must be negative.");
+      }
+      
+      // Must have magnitude < 1
+      if (std::abs(alpha) >= static_cast<CoordinateType>(1.0) + eps) {
+        throw std::runtime_error(
+          "Computed alpha violates ΛCDM expectation: |alpha| must be < 1.");
+      }
     
       logging::entry()
-        << "Computed alpha coefficient = " << alpha << std::endl;
+        << "Computed isocurvature alpha coefficient = " << alpha
+        << std::endl;
     
       return alpha;
     }
-
-    /*!
-     * \brief Compute variance of the baryon-CDM relative velocity transfer (vb-vc).
+      /*!
+     * \brief Compute the RMS baryon–CDM streaming velocity σ_{v_bc}(z)
      *
-     * Using the same primordial scaling as the rest of this class:
-     *   P_vbvc(k) ∝ amplitude * k^{ns} T_vbvc(k)^2
-     * and isotropic measure d^3k = 4π k^2 dk, the variance is
-     *
-     *   sigma_vbvc^2 = amplitude / (2π^2) ∫ dk k^{ns+2} T_vbvc(k)^2 .
-     *
-     * We evaluate the integral with a trapezoidal rule in ln k:
-     *   ∫ dk f(k) = ∫ dlnk [k f(k)] .
+     * This routine computes the variance of the baryon–CDM relative velocity
+     * field using the CAMB-provided transfer function for the vb–vc mode,
+     * sampled discretely in k–space. The integral is evaluated in log–k using
+     * a trapezoidal rule.
      */
     CoordinateType calculateVbVcVarianceDiscrete() const {
-      logging::entry()
-        << "Calculating vb-vc variance from CAMB transfer functions at z=0"
-        << std::endl;
-
+    
+      // Ensure the transfer function exists
       if (vbvcInterpolationPoints.empty()) {
         throw std::runtime_error(
-          "Cannot compute vb-vc variance: required CAMB transfer column is missing."
-        );
+          "Cannot compute vb-vc variance: required CAMB transfer column is missing.");
       }
-
-      constexpr auto h = 0.6732;
-      constexpr auto SpeedOfLight = 299792.458;
-      
+    
+      // Speed of light in km/s (used to convert to physical velocities)
+      constexpr CoordinateType C_KMS = static_cast<CoordinateType>(299792.458);
+    
       const auto &kcamb = kInterpolationPoints;
       const auto &Tvbvc = vbvcInterpolationPoints;
-
-      size_t n = kcamb.size();
-      if (Tvbvc.size() < n) n = Tvbvc.size();
-
+    
+      // Number of usable samples
+      size_t n = std::min(kcamb.size(), Tvbvc.size());
       if (n < 2) {
         throw std::runtime_error(
-          "Cannot compute vb-vc variance: CAMB transfer table has insufficient points."
-        );
+          "Cannot compute vb-vc variance: CAMB transfer table has insufficient points.");
       }
-
-      CoordinateType sum = 0;
+    
+      CoordinateType variance = 0;
+    
+      // Integrate in log–k using trapezoidal rule.
+      // We integrate Δ²(k) = linearAmplitude k^{n_s+3} T^2 / (2π²).
       for (size_t i = 0; i + 1 < n; ++i) {
-        const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i] * h);
-        const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1] * h);
-
+    
+        const CoordinateType k1 = static_cast<CoordinateType>(kcamb[i]);
+        const CoordinateType k2 = static_cast<CoordinateType>(kcamb[i + 1]);
         if (k1 <= 0 || k2 <= 0) continue;
-
+    
+        // Logarithmic spacing
         const CoordinateType dlnk = std::log(k2 / k1);
-
+    
         const CoordinateType T1 = static_cast<CoordinateType>(Tvbvc[i]);
         const CoordinateType T2 = static_cast<CoordinateType>(Tvbvc[i + 1]);
-
-        // Transfer functions are already divided by 1/k^2, so
-        // integrand ~ k^{ns+3} * |T_vbc|^2 in ln k.
-        const CoordinateType f1 =
-            std::pow(k1, ns + 3) *
-            (T1 * T1);
     
-        const CoordinateType f2 =
-            std::pow(k2, ns + 3) *
-            (T2 * T2);
+        // Power spectrum contributions at k1 and k2 (CAMB convention)
+        const CoordinateType P1 =
+          linearAmplitude * std::pow(k1, ns + 3) * T1 * T1 / (2 * M_PI * M_PI);
     
-        sum += static_cast<CoordinateType>(0.5) * (f1 + f2) * dlnk;
+        const CoordinateType P2 =
+          linearAmplitude * std::pow(k2, ns + 3) * T2 * T2 / (2 * M_PI * M_PI);
+    
+        // Trapezoidal step in ln k
+        variance += static_cast<CoordinateType>(0.5) * (P1 + P2) * dlnk;
       }
     
-      const CoordinateType variance =
-          amplitudeAtZ0 * sum / (static_cast<CoordinateType>(2) * M_PI * M_PI);
-    
+      // Convert variance → RMS streaming velocity.
+      //
+      // Multiply by c to convert dimensionless transfer → km/s,
+      // and multiply by (1+z) for the linear redshift evolution of v_bc.
       const CoordinateType sigma =
-          (variance > 0) ? std::sqrt(variance) * SpeedOfLight : 0;
+        (variance > 0)
+          ? std::sqrt(variance) * C_KMS * (static_cast<CoordinateType>(1) + cosmology_.redshift)
+          : static_cast<CoordinateType>(0);
     
+      // Latex-friendly logging output
       logging::entry()
-        << "Computed vb-vc sigma = " << sigma << " km/s" << std::endl;
+        << "Computed v_bc RMS:"
+        << "(z=)" << cosmology_.redshift
+        << "=" << sigma
+        << "km/s"
+        << std::endl;
     
       return sigma;
-    }        
+    }
 
   protected:
+    //! \brief Import data from CAMB file.
+    //! Both pre-2015 and post-2015 formats can be used, and the function will detect which.
+    void readLinesFromCambOutput(std::string filename) {
+      kInterpolationPoints.clear();
+      speciesToInterpolationPoints.clear();
+      vbvcInterpolationPoints.clear();
 
-      //! \brief This function imports data from a CAMB file, supplied as a file-name string argument (filename).
-      //! Both pre-2015 and post-2015 formats can be used, and the function will detect which.
-      void readLinesFromCambOutput(std::string filename) {
-        kInterpolationPoints.clear();
-        speciesToInterpolationPoints.clear();
-        vbvcInterpolationPoints.clear();
+      const int c_old_camb = 7;   // number of columns pre 2015
+      const int c_new_camb = 13;  // number of columns post 2015
+      const int vbvc_column_index = 12; // 0-based index for the 13th column
+      int numCols;
+      size_t j;
 
-        // Dealing with the update of the CAMB TF output. Both are kept for backward compatibility.
-        const int c_old_camb = 7; // number of columns in camb transfer function pre 2015
-        const int c_new_camb = 13; // number of columns in camb transfer function post 2015
-        const int vbvc_column_index = 12; // 13th column (1-based) for vb-vc in post-2015 CAMB output
-        int numCols;
-        size_t j;
+      std::vector<double> input;
+      io::getBufferIgnoringColumnHeaders(input, filename);
 
-        // Import data from CAMB file:
-        std::vector<double> input;
-        io::getBufferIgnoringColumnHeaders(input, filename);
+      numCols = io::getNumberOfColumns(filename);
 
-        // Check whether the input file is in the pre-2015 or post-2015 format (and throw an error if it is neither).
-        numCols = io::getNumberOfColumns(filename);
-
-        if (numCols == c_old_camb) {
+      if (numCols == c_old_camb) {
 #ifdef DEBUG_INFO
-          logging::entry() << "Using pre 2015 CAMB transfer function" << std::endl;
+        logging::entry() << "Using pre 2015 CAMB transfer function" << std::endl;
 #endif
-        } else if (numCols == c_new_camb) {
+      } else if (numCols == c_new_camb) {
 #ifdef DEBUG_INFO
-          logging::entry() << "Using post 2015 CAMB transfer function" << std::endl;
+        logging::entry() << "Using post 2015 CAMB transfer function" << std::endl;
 #endif
-        } else {
-          throw std::runtime_error("CAMB transfer file doesn't have a sensible number of columns");
-        }
-
-
-        CoordinateType transferNormalisation = input[1]; // to normalise CAMB transfer function so T(0)= 1, doesn't matter if we normalise here in terms of accuracy, but feels more natural
-        // Copy file into vectors. Normalise both so that the DM tranfer function starts at 1.
-        for (j = 0; j < input.size() / numCols; j++) {
-          if (input[numCols * j] > 0) {
-            // hard-coded to first two columns of CAMB file -
-            kInterpolationPoints.push_back(CoordinateType(input[numCols * j]));
-            for (auto i = speciesToCambColumn.begin(); i != speciesToCambColumn.end(); ++i) {
-              speciesToInterpolationPoints[i->first].push_back(CoordinateType(input[numCols * j + i->second]) / transferNormalisation);
-            }
-            if (numCols == c_new_camb) {
-              vbvcInterpolationPoints.push_back(
-                CoordinateType(input[numCols * j + vbvc_column_index])
-              );
-            }
-          } else continue;
-        }
-
-        kcamb_max_in_file = kInterpolationPoints.back();
-
+      } else {
+        throw std::runtime_error("CAMB transfer file doesn't have a sensible number of columns");
       }
+
+      CoordinateType transferNormalisation = static_cast<CoordinateType>(input[1]);
+
+      for (j = 0; j < input.size() / static_cast<size_t>(numCols); j++) {
+        if (input[numCols * j] > 0) {
+          kInterpolationPoints.push_back(static_cast<CoordinateType>(input[numCols * j]));
+
+          for (auto i = speciesToCambColumn.begin(); i != speciesToCambColumn.end(); ++i) {
+            speciesToInterpolationPoints[i->first].push_back(
+              static_cast<CoordinateType>(input[numCols * j + i->second]) / transferNormalisation);
+          }
+
+          if (numCols == c_new_camb) {
+            vbvcInterpolationPoints.push_back(
+              static_cast<CoordinateType>(input[numCols * j + vbvc_column_index]) / transferNormalisation);
+          }
+        }
+      }
+
+      kcamb_max_in_file = static_cast<CoordinateType>(kInterpolationPoints.back());
+    }
 
     //! Calculate the theoretical power spectrum for a given grid
     std::shared_ptr<fields::Field<DataType, CoordinateType>>
@@ -484,73 +498,100 @@ namespace cosmology {
 
       auto P = PowerSpectrum<DataType>::getPowerSpectrumForGridUncached(grid, transferType);
 
-      if (kcamb_max_in_file == std::numeric_limits<CoordinateType>().max()) {
-        logging::entry(logging::level::warning) << "WARNING: Maximum k in CAMB input file is insufficient" << std::endl
-                  << "*        You therefore have zero power in some of your modes, which is almost certainly not what you want" << std::endl
-                  << "*        You need to generate a transfer function that reaches higher k." << std::endl
-                  << "*        The current grid reaches k = " << grid->getFourierKmax() << " h/Mpc" << std::endl;
+      if (kcamb_max_in_file == std::numeric_limits<CoordinateType>::max()) {
+        logging::entry(logging::level::warning)
+          << "WARNING: Maximum k in CAMB input file is insufficient" << std::endl
+          << "*        You therefore have zero power in some of your modes, which is almost certainly not what you want"
+          << std::endl
+          << "*        You need to generate a transfer function that reaches higher k." << std::endl
+          << "*        The current grid reaches k = " << grid->getFourierKmax() << " h/Mpc" << std::endl;
       }
-
       return P;
-
     }
 
-      //! Return the cosmology-dependent part of the normalisation of the power spectrum.
-      void calculateOverallNormalization(const CosmologicalParameters<CoordinateType> &cosmology) {
-        constexpr auto h = 0.6732;
-        constexpr auto ScalarPivot = 0.05;
-        constexpr auto SpeedOfLight = 299792.458;
-        constexpr auto ScalarAmplitude = 2.100549e-9;
-  
-          
-        CoordinateType ourGrowthFactor = growthFactor(cosmology);
-        CoordinateType growthFactorNormalized = ourGrowthFactor / growthFactor(cosmologyAtRedshift(cosmology, 0));
-        CoordinateType sigma8PreNormalization = calculateLinearVarianceInSphere(8.);
-        CoordinateType linearRenorm = (cosmology.sigma8 / sigma8PreNormalization);
-        CoordinateType linearRenormFactor = linearRenorm * growthFactorNormalized;
-        
-        amplitudeAtZ0 = linearRenorm * linearRenorm;
-        logging::entry() << "Recomputed power spectrum amplitude = " << amplitudeAtZ0 << std::endl;
-        CoordinateType PrimordialAmplitude = ScalarAmplitude * std::pow(ScalarPivot, 1 - ns);
+    //! Return the cosmology-dependent part of the normalisation of the power spectrum.
+    void calculateOverallNormalization(const CosmologicalParameters<CoordinateType> &cosmology) {
 
-        amplitude = linearRenormFactor * linearRenormFactor;
-        logging::entry() << "Recomputed backscaled power spectrum amplitude = " << amplitude << std::endl;
-        
-      }
+      CoordinateType ourGrowthFactor = growthFactor(cosmology);
+      CoordinateType growthFactorNormalized = ourGrowthFactor / growthFactor(cosmologyAtRedshift(cosmology, 0));
+
+      CoordinateType sigma8PreNormalization = calculateLinearVarianceInSphere(8.);
+      CoordinateType linearRenorm = (cosmology.sigma8 / sigma8PreNormalization);
+      CoordinateType linearRenormFactor = linearRenorm * growthFactorNormalized;
+      
+      //used for computing RMS of Vbc field
+      linearAmplitude = linearRenorm * linearRenorm;
+      
+      //used for computing power spectrum with correct backscaled amplitude
+      amplitude = linearRenormFactor * linearRenormFactor;
+    }
+
+    //! Compute the variance in a spherical top hat window
+    // Compute the linear-theory rms variance of the density field smoothed
+    // with a spherical top–hat of radius R in real space.
+    // This evaluates the standard integral:
+    //
+    //    σ^2(R) = (1 / 2π^2) ∫ dk  k^2  P(k)  |W(kR)|^2
+    //
+    // where W(kR) is the Fourier-space top–hat filter. The power spectrum
+    // is obtained via the CAMB transfer function (t), assuming P(k) ∝ k^ns t^2.
+    //
+    // Returns σ(R), not σ^2.
+    CoordinateType calculateLinearVarianceInSphere(
+          CoordinateType radius,
+          particle::species transferType = particle::species::all) const {
     
-      //! Compute the variance in a spherical top hat window
-      CoordinateType calculateLinearVarianceInSphere(CoordinateType radius,
-                                                     particle::species transferType = particle::species::all) const {
-
-        CoordinateType s = 0., k, t;
-
-        CoordinateType amp = 9. / 2. / M_PI / M_PI;
-        CoordinateType kmax = std::min(kInterpolationPoints.back(), 200.0 / radius)*0.999999;
-        CoordinateType kmin = kInterpolationPoints[0]*1.000001;
-
-        CoordinateType dk = (kmax - kmin) / 50000.;
-        auto &interpolator = this->speciesToTransferFunction.at(transferType);
-        for (k = kmin; k < kmax; k += dk) {
-
-
-          t = interpolator(k);
-
-          // Multiply power spectrum by the fourier transform of the spherical top hat, to give the fourier transform
-          // of the averaged (convolved) power spectrum over the sphere.
-          s += pow(k, ns + 2.) *
-               ((sin(k * radius) - k * radius * cos(k * radius)) / ((k * radius) * (k * radius) * (k * radius))) *
-               ((sin(k * radius) - k * radius * cos(k * radius)) / ((k * radius) * (k * radius) * (k * radius))) * t * t;
-
-        }
-
-
-        s = sqrt(s * amp * dk);
-        return s;
-
-      }
+          CoordinateType s = 0., k, t;
     
+          // Prefactor = 9 / (2π^2), coming from |W(kR)|^2 combined with
+          // the 1/(2π^2) normalization of the variance integral.
+          CoordinateType amp =
+            static_cast<CoordinateType>(9) / static_cast<CoordinateType>(2) / M_PI / M_PI;
+    
+          // Upper integration bound.
+          // Limit to both the table range and  ~200/R to avoid ringing and small-scale noise.
+          // The 0.999999 avoids exactly hitting the table boundary.
+          CoordinateType kmax =
+            std::min(static_cast<CoordinateType>(kInterpolationPoints.back()),
+                     static_cast<CoordinateType>(200.0) / radius) *
+            static_cast<CoordinateType>(0.999999);
+    
+          // Lower integration bound.
+          // Slightly above the minimum tabulated k to avoid interpolation edge effects.
+          CoordinateType kmin =
+            static_cast<CoordinateType>(kInterpolationPoints[0]) *
+            static_cast<CoordinateType>(1.000001);
+    
+          // Uniform k–space sampling step for the discrete sum approximation.
+          // 50,000 steps is chosen to ensure numerical stability.
+          CoordinateType dk = (kmax - kmin) / static_cast<CoordinateType>(50000);
+    
+          // Retrieve the appropriate transfer function (baryon, CDM, total matter, etc.)
+          auto &interpolator = this->speciesToTransferFunction.at(transferType);
+    
+          for (k = kmin; k < kmax; k += dk) {
+            // Interpolate transfer function at k.
+            // t encodes the linear evolution scaling applied to primordial modes.
+            t = interpolator(k);
+    
+            const CoordinateType kr = k * radius;
+    
+            // Fourier-space spherical top-hat window:
+            //      W(x) = 3 (sin x − x cos x) / x^3
+            //
+            // Here the factor of 3 has already been absorbed into `amp` above.
+            const CoordinateType W =
+              (std::sin(kr) - kr * std::cos(kr)) / (kr * kr * kr);
+
+            s += std::pow(k, ns + static_cast<CoordinateType>(2)) * W * W * t * t;
+          }
+          // Multiply by dk and prefactor, then take square root to obtain σ(R)
+          s = std::sqrt(s * amp * dk);
+          return s;
+    }
+
   };
 
-}
+} // namespace cosmology
 
 #endif

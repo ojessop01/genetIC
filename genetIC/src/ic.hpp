@@ -297,7 +297,7 @@ public:
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->isocurvatureEnabled = true;
-      logging::entry() << "Isocurvature-specific Grafic mass fractions: enabled" << endl;
+      logging::entry() << "Isocurvature-specific Grafic mass fractions enabled, perturbing baryon and CDM density fields accordingly" << endl;
       auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
       if (cambSpectrum != nullptr) {
         cambSpectrum->computeIsocurvatureAlpha();
@@ -317,7 +317,7 @@ public:
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->applyVbvcVelocity = true;
-      logging::entry() << "Grafic vb-vc velocity perturbation: enabled" << endl;
+      logging::entry() << "Grafic vb-vc velocity perturbation enabled, imposing bulk baryon-CDM relative velocity" << endl;
       auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
       if (cambSpectrum != nullptr) {
         cambSpectrum->computeVbvcVariance();
@@ -333,15 +333,22 @@ public:
 
   //! Set axis along which to apply vb-vc velocity perturbation in grafic output
   void setVbvcAxis(std::string axis) {
-    std::transform(axis.begin(), axis.end(), axis.begin(), [](unsigned char c) { return std::tolower(c); });
-
+    std::transform(axis.begin(), axis.end(), axis.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+  
     if (axis == "x" || axis == "0") {
       vbvcAxis = 0;
-    } else if (axis == "y" || axis == "1") {
+      logging::entry() << "Applying vb-vc bulk velocity along X axis (0)" << std::endl;
+    } 
+    else if (axis == "y" || axis == "1") {
       vbvcAxis = 1;
-    } else if (axis == "z" || axis == "2") {
+      logging::entry() << "Applying vb-vc bulk velocity along Y axis (1)" << std::endl;
+    } 
+    else if (axis == "z" || axis == "2") {
       vbvcAxis = 2;
-    } else {
+      logging::entry() << "Applying vb-vc bulk velocity along Z axis (2)" << std::endl;
+    } 
+    else {
       throw std::runtime_error("vbvc_axis must be x, y, z (or 0, 1, 2)");
     }
   }
@@ -352,7 +359,7 @@ public:
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->writeExtraGraficFields = true;
-      logging::entry() << "Grafic extra fields: enabled" << endl;
+      logging::entry() << "Grafic extra fields: enabled, writing additional IC fields anyway" << endl;
     } else if (flag == "0" || flag == "false" || flag == "off") {
       this->writeExtraGraficFields = false;
       logging::entry() << "Grafic extra fields: disabled" << endl;
