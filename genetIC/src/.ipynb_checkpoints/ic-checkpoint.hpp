@@ -156,6 +156,15 @@ protected:
   //! Enable isocurvature-specific mass fractions in grafic output, false by default
   bool isocurvatureEnabled = true;
 
+  //! Enable vb-vc velocity perturbation in grafic output.
+  bool applyVbvcVelocity = false;
+
+  //! Axis for vb-vc velocity perturbation in grafic output (0=x,1=y,2=z).
+  int vbvcAxis = 0;
+
+  //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
+  bool writeExtraGraficFields = false;
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -288,12 +297,74 @@ public:
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->isocurvatureEnabled = true;
-      logging::entry() << "Isocurvature-specific Grafic mass fractions: enabled" << endl;
+      logging::entry() << "Isocurvature-specific Grafic mass fractions enabled, perturbing baryon and CDM density fields accordingly" << endl;
+      auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
+      if (cambSpectrum != nullptr) {
+        cambSpectrum->computeIsocurvatureAlpha();
+      }
     } else if (flag == "0" || flag == "false" || flag == "off") {
       this->isocurvatureEnabled = false;
+      cosmology::isocurvature_alpha() = 0.0;
       logging::entry() << "Isocurvature-specific Grafic mass fractions: disabled" << endl;
     } else {
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set whether to apply vb-vc velocity perturbation in grafic output
+  void setVbvcVelocity(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->applyVbvcVelocity = true;
+      logging::entry() << "Grafic vb-vc velocity perturbation enabled, imposing bulk baryon-CDM relative velocity" << endl;
+      auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
+      if (cambSpectrum != nullptr) {
+        cambSpectrum->computeVbvcVariance();
+      }
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->applyVbvcVelocity = false;
+      cosmology::vbvc_variance() = 0.0;
+      logging::entry() << "Grafic vb-vc velocity perturbation: disabled" << endl;
+    } else {
+      throw std::runtime_error("vbvc_velocity flag must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set axis along which to apply vb-vc velocity perturbation in grafic output
+  void setVbvcAxis(std::string axis) {
+    std::transform(axis.begin(), axis.end(), axis.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+  
+    if (axis == "x" || axis == "0") {
+      vbvcAxis = 0;
+      logging::entry() << "Applying vb-vc bulk velocity along X axis (0)" << std::endl;
+    } 
+    else if (axis == "y" || axis == "1") {
+      vbvcAxis = 1;
+      logging::entry() << "Applying vb-vc bulk velocity along Y axis (1)" << std::endl;
+    } 
+    else if (axis == "z" || axis == "2") {
+      vbvcAxis = 2;
+      logging::entry() << "Applying vb-vc bulk velocity along Z axis (2)" << std::endl;
+    } 
+    else {
+      throw std::runtime_error("vbvc_axis must be x, y, z (or 0, 1, 2)");
+    }
+  }
+
+  //! Set whether to always write extra grafic fields (developer mode)
+  void setWriteExtraGraficFields(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->writeExtraGraficFields = true;
+      logging::entry() << "Grafic extra fields: enabled, writing additional IC fields anyway" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->writeExtraGraficFields = false;
+      logging::entry() << "Grafic extra fields: disabled" << endl;
+    } else {
+      throw std::runtime_error("write_extra_grafic_fields must be true/false (or 1/0)");
     }
   }
 
@@ -744,7 +815,9 @@ public:
   * \param cambFieldPath - string of path to CAMB file
   */
   void setCambDat(std::string cambFilePath) {
-    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath);
+    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath,
+                                                               isocurvatureEnabled,
+                                                               applyVbvcVelocity);
     this->multiLevelContext.setPowerspectrumGenerator(*spectrum);
   }
 
@@ -1344,6 +1417,7 @@ public:
 
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
+                     applyVbvcVelocity, vbvcAxis, writeExtraGraficFields,
                      pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
