@@ -1,11 +1,15 @@
-# genetIC v1.5.0, compiled: Dec 30 2025, 22:18:42
-#                  runtime: Dec 30 2025, 22:19:59
+# genetIC v1.5.0, compiled: Dec 30 2025, 22:29:36
+#                  runtime: Dec 30 2025, 22:46:40
 
 # git HEAD:23eead7
 # At the time of compilation, the following files had been modified:
+#   IC_output.params
 #   genetIC
+#   genetIC_mapper
+#   src/.ipynb_checkpoints/ic-checkpoint.hpp
 #   src/cosmology/.ipynb_checkpoints/camb-checkpoint.hpp
 #   src/cosmology/camb.hpp
+#   src/ic.hpp
 #   src/io/.ipynb_checkpoints/grafic-checkpoint.hpp
 #   src/io/grafic.hpp
 #   
@@ -18,14 +22,19 @@ hubble 0.6732
 z 127 
 camb planck_2018_transfer_out.dat 
 random_seed 8896131 
-isocurvature true 
-vbvc_velocity true 
-vbvc_axis 2 
+isocurvature false 
+vbvc_velocity false 
+vbvc_axis 0 
 write_extra_grafic_fields true 
 outname test 
-outdir /home/kbgj57/genetIC/example/iso/ 
+outdir /home/kbgj57/genetIC/example/no_iso/ 
 outformat grafic 
-base_grid 50 64 
+base_grid 25 128 
+centre 12.5 12.5 12.5 
+select_sphere 2 
+zoom_grid 3 128 
 done 
 dump_ps 0 
 dump_ps 1 
+dump_grid 0 
+dump_grid 1 
