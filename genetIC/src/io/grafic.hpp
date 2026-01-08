@@ -68,6 +68,10 @@ namespace io {
       // --- vb-vc relative velocity settings ---
       bool applyVbvcVelocity; //!< Apply vb-vc velocity perturbation to CDM velocities.
       int vbvcAxis; //!< Axis (0=x,1=y,2=z) along which to apply vb-vc perturbation.
+      T vbvcSigmaMultiplier; //!< Sigma multiplier for vb-vc velocity perturbation.
+      bool vbvcAxisVectorEnabled; //!< Use axis vector instead of axis index.
+      Coordinate<T> vbvcAxisVector; //!< Axis vector for vb-vc perturbation.
+      std::optional<T> vbvcVelocityOverrideKms; //!< Optional override for vb-vc velocity (km/s).
       bool writeExtraGraficFields; //!< Always write extra fields even if features are disabled.
 
     public:
@@ -92,6 +96,10 @@ namespace io {
                    bool isocurvatureEnabled,
                    bool applyVbvcVelocity,
                    int vbvcAxis,
+                   T vbvcSigmaMultiplier,
+                   bool vbvcAxisVectorEnabled,
+                   Coordinate<T> vbvcAxisVector,
+                   std::optional<T> vbvcVelocityOverrideKms,
                    bool writeExtraGraficFields,
                    const T pvarValue,
                    Coordinate<T> center,
@@ -105,6 +113,10 @@ namespace io {
         set_isocurvature(isocurvatureEnabled),
         applyVbvcVelocity(applyVbvcVelocity),
         vbvcAxis(vbvcAxis),
+        vbvcSigmaMultiplier(vbvcSigmaMultiplier),
+        vbvcAxisVectorEnabled(vbvcAxisVectorEnabled),
+        vbvcAxisVector(vbvcAxisVector),
+        vbvcVelocityOverrideKms(vbvcVelocityOverrideKms),
         writeExtraGraficFields(writeExtraGraficFields),
         fbaryon(T(0)),
         fc(T(0)) {
@@ -221,9 +233,13 @@ namespace io {
 
           float vbvcOffset = 0.0f;
           if (applyVbvcVelocity) {
-            const double vbvcVariance = cosmology::vbvc_variance();
-            if (vbvcVariance > 0.0) {
-              vbvcOffset = static_cast<float>(vbvcVariance);
+            if (vbvcVelocityOverrideKms.has_value()) {
+              vbvcOffset = static_cast<float>(vbvcVelocityOverrideKms.value());
+            } else {
+              const double vbvcVariance = cosmology::vbvc_variance();
+              if (vbvcVariance > 0.0) {
+                vbvcOffset = static_cast<float>(vbvcVariance * vbvcSigmaMultiplier);
+              }
             }
           }
 
@@ -264,9 +280,15 @@ namespace io {
               float velbz = velScaled.z;
 
               if (applyVbvcVelocity && vbvcOffset != 0.0f) {
-                if (vbvcAxis == 0)      velcx -= vbvcOffset;
-                else if (vbvcAxis == 1) velcy -= vbvcOffset;
-                else if (vbvcAxis == 2) velcz -= vbvcOffset;
+                if (vbvcAxisVectorEnabled) {
+                  velcx -= vbvcOffset * static_cast<float>(vbvcAxisVector.x);
+                  velcy -= vbvcOffset * static_cast<float>(vbvcAxisVector.y);
+                  velcz -= vbvcOffset * static_cast<float>(vbvcAxisVector.z);
+                } else {
+                  if (vbvcAxis == 0)      velcx -= vbvcOffset;
+                  else if (vbvcAxis == 1) velcy -= vbvcOffset;
+                  else if (vbvcAxis == 2) velcz -= vbvcOffset;
+                }
               }
 
               varMaps[velcxIndex][file_index] = velcx;
@@ -339,6 +361,10 @@ namespace io {
               bool isocurvatureEnabled,
               bool applyVbvcVelocity,
               int vbvcAxis,
+              T vbvcSigmaMultiplier,
+              bool vbvcAxisVectorEnabled,
+              Coordinate<T> vbvcAxisVector,
+              std::optional<T> vbvcVelocityOverrideKms,
               bool writeExtraGraficFields,
               const T pvarValue,
               Coordinate<T> center,
@@ -349,7 +375,9 @@ namespace io {
 
       GraficOutput<DataType> output(filename, context, generators,
                                     cosmology, isocurvatureEnabled,
-                                    applyVbvcVelocity, vbvcAxis, writeExtraGraficFields, pvarValue,
+                                    applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier,
+                                    vbvcAxisVectorEnabled, vbvcAxisVector, vbvcVelocityOverrideKms,
+                                    writeExtraGraficFields, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();

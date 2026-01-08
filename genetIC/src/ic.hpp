@@ -13,6 +13,8 @@
 #include <cctype>
 #include <stdexcept>
 #include <sstream>
+#include <cmath>
+#include <optional>
 
 #include "tools/numerics/vectormath.hpp"
 #include "tools/numerics/fourier.hpp"
@@ -162,6 +164,18 @@ protected:
   //! Axis for vb-vc velocity perturbation in grafic output (0=x,1=y,2=z).
   int vbvcAxis = 0;
 
+  //! Scale factor for vb-vc velocity perturbation (multiples of sigma).
+  T vbvcSigmaMultiplier = 1.0;
+
+  //! vb-vc velocity perturbation axis vector (normalized).
+  Coordinate<T> vbvcAxisVector = {1.0, 0.0, 0.0};
+
+  //! Whether to use vb-vc axis vector instead of axis index.
+  bool vbvcAxisVectorEnabled = false;
+
+  //! Optional override for vb-vc velocity amplitude in km/s.
+  std::optional<T> vbvcVelocityOverrideKms;
+
   //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
   bool writeExtraGraficFields = false;
 
@@ -298,6 +312,9 @@ public:
     if (flag == "1" || flag == "true" || flag == "on") {
       this->isocurvatureEnabled = true;
       logging::entry() << "Isocurvature-specific Grafic mass fractions enabled, perturbing baryon and CDM density fields accordingly" << endl;
+      logging::entry(logging::warning)
+        << "WARNING: isocurvature modifies baryon/CDM density fields and mass fractions in Grafic output."
+        << endl;
       auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
       if (cambSpectrum != nullptr) {
         cambSpectrum->computeIsocurvatureAlpha();
@@ -318,6 +335,9 @@ public:
     if (flag == "1" || flag == "true" || flag == "on") {
       this->applyVbvcVelocity = true;
       logging::entry() << "Grafic vb-vc velocity perturbation enabled, imposing bulk baryon-CDM relative velocity" << endl;
+      logging::entry(logging::warning)
+        << "WARNING: vb-vc applies a bulk CDM velocity offset in Grafic output only."
+        << endl;
       auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
       if (cambSpectrum != nullptr) {
         cambSpectrum->computeVbvcVariance();
@@ -335,22 +355,59 @@ public:
   void setVbvcAxis(std::string axis) {
     std::transform(axis.begin(), axis.end(), axis.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-  
+
     if (axis == "x" || axis == "0") {
       vbvcAxis = 0;
+      vbvcAxisVectorEnabled = false;
       logging::entry() << "Applying vb-vc bulk velocity along X axis (0)" << std::endl;
     } 
     else if (axis == "y" || axis == "1") {
       vbvcAxis = 1;
+      vbvcAxisVectorEnabled = false;
       logging::entry() << "Applying vb-vc bulk velocity along Y axis (1)" << std::endl;
     } 
     else if (axis == "z" || axis == "2") {
       vbvcAxis = 2;
+      vbvcAxisVectorEnabled = false;
       logging::entry() << "Applying vb-vc bulk velocity along Z axis (2)" << std::endl;
     } 
     else {
       throw std::runtime_error("vbvc_axis must be x, y, z (or 0, 1, 2)");
     }
+  }
+
+  //! Set vb-vc axis vector (components will be normalized)
+  void setVbvcAxisVector(T x, T y, T z) {
+    Coordinate<T> axis(x, y, z);
+    T norm = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    if (norm <= 0) {
+      throw std::runtime_error("vbvc_axis_vector must be non-zero");
+    }
+    vbvcAxisVector = axis / norm;
+    vbvcAxisVectorEnabled = true;
+    logging::entry() << "Applying vb-vc bulk velocity along vector ("
+                     << vbvcAxisVector.x << ", " << vbvcAxisVector.y << ", " << vbvcAxisVector.z
+                     << ")" << std::endl;
+  }
+
+  //! Set scaling for vb-vc velocity perturbation in grafic output
+  void setVbvcSigmaMultiplier(T multiplier) {
+    if (multiplier < 0) {
+      throw std::runtime_error("vbvc_sigma must be >= 0");
+    }
+    vbvcSigmaMultiplier = multiplier;
+    logging::entry() << "Grafic vb-vc velocity perturbation sigma multiplier set to "
+                     << vbvcSigmaMultiplier << endl;
+  }
+
+  //! Override vb-vc velocity amplitude in km/s (when enabled)
+  void setVbvcVelocityOverrideKms(T velocityKms) {
+    if (velocityKms < 0) {
+      throw std::runtime_error("vbvc_velocity_kms must be >= 0");
+    }
+    vbvcVelocityOverrideKms = velocityKms;
+    logging::entry() << "Grafic vb-vc velocity override set to "
+                     << velocityKms << " km/s" << endl;
   }
 
   //! Set whether to always write extra grafic fields (developer mode)
@@ -1417,7 +1474,8 @@ public:
 
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
-                     applyVbvcVelocity, vbvcAxis, writeExtraGraficFields,
+                     applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier, vbvcAxisVectorEnabled,
+                     vbvcAxisVector, vbvcVelocityOverrideKms, writeExtraGraficFields,
                      pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
