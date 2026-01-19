@@ -73,6 +73,7 @@ namespace io {
       Coordinate<T> vbvcAxisVector; //!< Axis vector for vb-vc perturbation.
       std::optional<T> vbvcVelocityOverrideKms; //!< Optional override for vb-vc velocity (km/s).
       bool writeExtraGraficFields; //!< Always write extra fields even if features are disabled.
+      bool writeCdmDensityGrid; //!< Write CDM density grid when isocurvature is enabled.
 
     public:
       /*! \brief Constructor
@@ -101,6 +102,7 @@ namespace io {
                    Coordinate<T> vbvcAxisVector,
                    std::optional<T> vbvcVelocityOverrideKms,
                    bool writeExtraGraficFields,
+                   bool writeCdmDensityGrid,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -118,6 +120,7 @@ namespace io {
         vbvcAxisVector(vbvcAxisVector),
         vbvcVelocityOverrideKms(vbvcVelocityOverrideKms),
         writeExtraGraficFields(writeExtraGraficFields),
+        writeCdmDensityGrid(writeCdmDensityGrid),
         fbaryon(T(0)),
         fc(T(0)) {
 
@@ -199,9 +202,9 @@ namespace io {
         const std::optional<size_t> velbyIndex = writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velby")) : std::nullopt;
         const std::optional<size_t> velbzIndex = writeBaryonVelocities ? std::optional<size_t>(addFloatFile("ic_velbz")) : std::nullopt;
 
-        const bool writeIsocurvatureFields = set_isocurvature || writeExtraGraficFields;
-        const std::optional<size_t> deltacIndex = writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_deltac")) : std::nullopt;
-        const std::optional<size_t> masscIndex = writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_massc")) : std::nullopt;
+        const bool writeCdmGrid = set_isocurvature && writeCdmDensityGrid;
+        const std::optional<size_t> deltacIndex = writeCdmGrid ? std::optional<size_t>(addFloatFile("ic_deltac")) : std::nullopt;
+        const std::optional<size_t> masscIndex = writeCdmGrid ? std::optional<size_t>(addFloatFile("ic_massc")) : std::nullopt;
 
         std::vector<tools::MemMapFileWriter> files;
         files.reserve(floatFilenames.size());
@@ -311,7 +314,9 @@ namespace io {
 
               if (deltacIndex) {
                 varMaps[*deltacIndex][file_index] = deltac;
-                varMaps[*masscIndex][file_index]  = massc;
+                if (masscIndex) {
+                  varMaps[*masscIndex][file_index]  = massc;
+                }
               }
 
               idMap[file_index] = global_index;
@@ -366,6 +371,7 @@ namespace io {
               Coordinate<T> vbvcAxisVector,
               std::optional<T> vbvcVelocityOverrideKms,
               bool writeExtraGraficFields,
+              bool writeCdmDensityGrid,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -377,7 +383,7 @@ namespace io {
                                     cosmology, isocurvatureEnabled,
                                     applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier,
                                     vbvcAxisVectorEnabled, vbvcAxisVector, vbvcVelocityOverrideKms,
-                                    writeExtraGraficFields, pvarValue,
+                                    writeExtraGraficFields, writeCdmDensityGrid, pvarValue,
                                     center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();
