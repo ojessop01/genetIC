@@ -179,6 +179,9 @@ protected:
   //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
   bool writeExtraGraficFields = false;
 
+  //! If true, write the CDM density grid in grafic output when isocurvature is enabled.
+  bool writeCdmDensityGrid = false;
+
   //! If true, dump the white noise field before applying transfer functions.
   bool dumpWhiteNoiseField = false;
 
@@ -425,6 +428,21 @@ public:
       logging::entry() << "Grafic extra fields: disabled" << endl;
     } else {
       throw std::runtime_error("write_extra_grafic_fields must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set whether to write the CDM density grid in grafic output (requires isocurvature).
+  void setWriteCdmDensityGrid(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      writeCdmDensityGrid = true;
+      logging::entry() << "Grafic CDM density grid output: enabled" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      writeCdmDensityGrid = false;
+      logging::entry() << "Grafic CDM density grid output: disabled" << endl;
+    } else {
+      throw std::runtime_error("write_cdm_density_grid must be true/false (or 1/0)");
     }
   }
 
@@ -1506,11 +1524,17 @@ public:
           centre = Coordinate<T>(x0, y0, z0);
         }
 
+        bool writeCdmGridNow = writeCdmDensityGrid;
+        if (writeCdmGridNow && !isocurvatureEnabled) {
+          logging::entry() << "Not writing cdm grid because its identical to baryon grid." << endl;
+          writeCdmGridNow = false;
+        }
+
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
                      applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier, vbvcAxisVectorEnabled,
                      vbvcAxisVector, vbvcVelocityOverrideKms, writeExtraGraficFields,
-                     pvarValue, centre,
+                     writeCdmGridNow, pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
       default:

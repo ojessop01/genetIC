@@ -80,6 +80,7 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     dispatch.add_class_route("outname", &ICType::setOutName);
     dispatch.add_class_route("outformat", &ICType::setOutputFormat);
     dispatch.add_class_route("dump_whitenoise", &ICType::setDumpWhiteNoise);
+    dispatch.add_class_route("write_cdm_density_grid", &ICType::setWriteCdmDensityGrid);
 
     // Define grid structure - OLD NAMES
     dispatch.add_deprecated_class_route("basegrid", "base_grid", &ICType::initBaseGrid);
