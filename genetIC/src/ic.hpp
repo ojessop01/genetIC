@@ -179,6 +179,9 @@ protected:
   //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
   bool writeExtraGraficFields = false;
 
+  //! If true, dump the white noise field before applying transfer functions.
+  bool dumpWhiteNoiseField = false;
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -422,6 +425,21 @@ public:
       logging::entry() << "Grafic extra fields: disabled" << endl;
     } else {
       throw std::runtime_error("write_extra_grafic_fields must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set whether to dump the white noise field before applying the power spectrum.
+  void setDumpWhiteNoise(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      dumpWhiteNoiseField = true;
+      logging::entry() << "White noise field output: enabled" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      dumpWhiteNoiseField = false;
+      logging::entry() << "White noise field output: disabled" << endl;
+    } else {
+      throw std::runtime_error("dump_whitenoise must be true/false (or 1/0)");
     }
   }
 
@@ -1084,6 +1102,22 @@ public:
     field.toFourier();
     fields::Field<complex<T>, T> fieldToWrite = tools::numerics::fourier::getComplexFourierField(field.getFieldForLevel(level));
     dumpGridData(level, fieldToWrite);
+  }
+
+  //! Dumps the white noise field for all levels (if still in white noise form).
+  void dumpWhiteNoiseFields() {
+    if (outputFields.empty()) {
+      throw std::runtime_error("No output fields available to dump white noise.");
+    }
+    if (outputFields[0]->getTransferType() != particle::species::whitenoise) {
+      throw std::runtime_error("White noise field can only be dumped before the power spectrum is applied.");
+    }
+
+    outputFields[0]->toReal();
+    const std::string prefix = "grid_whitenoise";
+    for (size_t level = 0; level < outputFields[0]->getNumLevels(); ++level) {
+      dumpGridData(level, outputFields[0]->getFieldForLevel(level), prefix);
+    }
   }
 
   //! Dumps power spectrum generated from the field and the theory at a given level in a .ps file
@@ -1800,6 +1834,10 @@ public:
 
     if (modificationManager.hasModifications())
       applyModifications();
+
+    if (dumpWhiteNoiseField) {
+      dumpWhiteNoiseFields();
+    }
 
     write();
   }
