@@ -1069,6 +1069,27 @@ public:
     ifile.close();
   }
 
+  //! \brief Outputs data about a specified field to a file with an explicit basename.
+  template<typename TField>
+  void dumpGridDataToPath(const TField &data, const std::string &baseName) {
+    initialiseRandomComponentIfUninitialised();
+
+    auto levelGrid = data.getGrid();
+
+    std::string filename = outputFolder + "/" + baseName + ".npy";
+    data.dumpGridData(filename);
+
+    filename = outputFolder + "/" + baseName + "-info.txt";
+    ofstream ifile;
+    ifile.open(filename);
+
+    ifile << levelGrid.offsetLower.x << " " << levelGrid.offsetLower.y << " "
+          << levelGrid.offsetLower.z << " " << levelGrid.thisGridSize << endl;
+    ifile << "The line above contains information about grid level 0" << endl;
+    ifile << "It gives the x-offset, y-offset and z-offset of the low-left corner and also the box length" << endl;
+    ifile.close();
+  }
+
 
   //! Dumps overdensity of specified field in a tipsy format
   /*!
@@ -1132,10 +1153,7 @@ public:
     }
 
     outputFields[0]->toReal();
-    const std::string prefix = "grid_whitenoise";
-    for (size_t level = 0; level < outputFields[0]->getNumLevels(); ++level) {
-      dumpGridData(level, outputFields[0]->getFieldForLevel(level), prefix);
-    }
+    dumpGridDataToPath(outputFields[0]->getFieldForLevel(0), "white_noise");
   }
 
   //! Dumps power spectrum generated from the field and the theory at a given level in a .ps file
