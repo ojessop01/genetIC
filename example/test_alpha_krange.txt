@@ -1,0 +1,35 @@
+# Test paramfile for alpha k-range options
+# This tests the new alpha_k_limits_from_boxsize and alpha_k_max_from_grid features
+
+# Cosmology
+Om 0.3111
+Ol 0.6889
+Ob 0.0489
+s8 0.8102
+hubble 0.6766
+ns 0.9665
+z 99
+
+# Grid setup - base grid + zoom
+base_grid 25.0 64
+zoom_grid 2 64
+
+# Output format
+output_path /tmp/test_alpha
+output_format grafic
+
+# Enable the new alpha k-range options
+# k_min will be derived from boxsize = 2*pi/25 = 0.251 h/Mpc
+# k_max will be derived from finest grid Nyquist frequency
+alpha_k_limits_from_boxsize true
+alpha_k_max_from_grid true
+
+# Now load the CAMB transfer function
+# (This must come after grid setup when using alpha_k_max_from_grid)
+camb planck_2018_transfer_out.dat
+
+# Generate dark matter only
+dm
+
+# Done
+done

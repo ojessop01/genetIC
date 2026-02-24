@@ -59,8 +59,15 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     dispatch.add_class_route("center_output", &ICType::setCenteringOnRegion);
 
     dispatch.add_class_route("isocurvature", &ICType::setIsocurvature);
+    dispatch.add_class_route("alpha_k_limits_from_boxsize", &ICType::setAlphaKLimitsFromBoxsize);
+    dispatch.add_class_route("alpha_k_max", &ICType::setAlphaKMax);
+    dispatch.add_class_route("alpha_k_max_from_grid", &ICType::setAlphaKMaxFromGrid);
     dispatch.add_class_route("vbvc_velocity", &ICType::setVbvcVelocity);
     dispatch.add_class_route("vbvc_axis", &ICType::setVbvcAxis);
+    dispatch.add_class_route("vbvc_axis_vector", &ICType::setVbvcAxisVector);
+    dispatch.add_class_route("vbvc_sigma", &ICType::setVbvcSigmaMultiplier);
+    dispatch.add_class_route("vbvc_velocity_kms", &ICType::setVbvcVelocityOverrideKms);
+    dispatch.add_class_route("write_extra_grafic_fields", &ICType::setWriteExtraGraficFields);
     // Gadget options
     dispatch.add_class_route("gadget_particle_type", &ICType::setGadgetParticleType);
     dispatch.add_class_route("gadget_flagged_particle_type", &ICType::setFlaggedGadgetParticleType);
@@ -131,6 +138,7 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     // dispatch.add_class_route("dump_grid", &ICType::dumpGrid);
     dispatch.add_class_route("dump_grid", static_cast<void (ICType::*)(size_t)>(&ICType::dumpGrid));
     dispatch.add_class_route("dump_vx", static_cast<void (ICType::*)(size_t)>(&ICType::dumpVelocityX));
+    dispatch.add_class_route("dump_whitenoise", static_cast<void (ICType::*)(size_t)>(&ICType::dumpWhiteNoise));
     dispatch.add_class_route("dump_grid_for_field", static_cast<void (ICType::*)(size_t, particle::species)>(&ICType::dumpGrid));
     dispatch.add_class_route("dump_grid_fourier", static_cast<void (ICType::*)(size_t)>(&ICType::dumpGridFourier));
     dispatch.add_class_route("dump_grid_fourier_for_field",

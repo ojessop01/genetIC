@@ -1,0 +1,4 @@
+/home/kbgj57/genetIC/build/CMakeFiles/genetIC.dir
+/home/kbgj57/genetIC/build/CMakeFiles/genetIC_mapper.dir
+/home/kbgj57/genetIC/build/CMakeFiles/edit_cache.dir
+/home/kbgj57/genetIC/build/CMakeFiles/rebuild_cache.dir

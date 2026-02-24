@@ -13,6 +13,8 @@
 #include <cctype>
 #include <stdexcept>
 #include <sstream>
+#include <cmath>
+#include <optional>
 
 #include "tools/numerics/vectormath.hpp"
 #include "tools/numerics/fourier.hpp"
@@ -156,6 +158,30 @@ protected:
   //! Enable isocurvature-specific mass fractions in grafic output, false by default
   bool isocurvatureEnabled = true;
 
+  //! Enable vb-vc velocity perturbation in grafic output.
+  bool applyVbvcVelocity = false;
+
+  //! Axis for vb-vc velocity perturbation in grafic output (0=x,1=y,2=z).
+  int vbvcAxis = 0;
+
+  //! Scale factor for vb-vc velocity perturbation (multiples of sigma).
+  T vbvcSigmaMultiplier = 1.0;
+
+  //! vb-vc velocity perturbation axis vector (normalized).
+  Coordinate<T> vbvcAxisVector = {1.0, 0.0, 0.0};
+
+  //! Whether to use vb-vc axis vector instead of axis index.
+  bool vbvcAxisVectorEnabled = false;
+
+  //! Optional override for vb-vc velocity amplitude in km/s.
+  std::optional<T> vbvcVelocityOverrideKms;
+
+  //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
+  bool writeExtraGraficFields = false;
+
+  //! If true, dump the white noise field before applying transfer functions.
+  bool dumpWhiteNoiseField = false;
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -288,12 +314,132 @@ public:
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->isocurvatureEnabled = true;
-      logging::entry() << "Isocurvature-specific Grafic mass fractions: enabled" << endl;
+      logging::entry() << "Isocurvature-specific Grafic mass fractions enabled, perturbing baryon and CDM density fields accordingly" << endl;
+      logging::entry(logging::warning)
+        << "WARNING: isocurvature modifies baryon/CDM density fields and mass fractions in Grafic output."
+        << endl;
+      auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
+      if (cambSpectrum != nullptr) {
+        cambSpectrum->computeIsocurvatureAlpha();
+      }
     } else if (flag == "0" || flag == "false" || flag == "off") {
       this->isocurvatureEnabled = false;
+      cosmology::isocurvature_alpha() = 0.0;
       logging::entry() << "Isocurvature-specific Grafic mass fractions: disabled" << endl;
     } else {
       throw std::runtime_error("isocurvature flag must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set whether to apply vb-vc velocity perturbation in grafic output
+  void setVbvcVelocity(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->applyVbvcVelocity = true;
+      logging::entry() << "Grafic vb-vc velocity perturbation enabled, imposing bulk baryon-CDM relative velocity" << endl;
+      logging::entry(logging::warning)
+        << "WARNING: vb-vc applies a bulk CDM velocity offset in Grafic output only."
+        << endl;
+      auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
+      if (cambSpectrum != nullptr) {
+        cambSpectrum->computeVbvcVariance();
+      }
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->applyVbvcVelocity = false;
+      cosmology::vbvc_variance() = 0.0;
+      logging::entry() << "Grafic vb-vc velocity perturbation: disabled" << endl;
+    } else {
+      throw std::runtime_error("vbvc_velocity flag must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set axis along which to apply vb-vc velocity perturbation in grafic output
+  void setVbvcAxis(std::string axis) {
+    std::transform(axis.begin(), axis.end(), axis.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    if (axis == "x" || axis == "0") {
+      vbvcAxis = 0;
+      vbvcAxisVectorEnabled = false;
+      logging::entry() << "Applying vb-vc bulk velocity along X axis (0)" << std::endl;
+    } 
+    else if (axis == "y" || axis == "1") {
+      vbvcAxis = 1;
+      vbvcAxisVectorEnabled = false;
+      logging::entry() << "Applying vb-vc bulk velocity along Y axis (1)" << std::endl;
+    } 
+    else if (axis == "z" || axis == "2") {
+      vbvcAxis = 2;
+      vbvcAxisVectorEnabled = false;
+      logging::entry() << "Applying vb-vc bulk velocity along Z axis (2)" << std::endl;
+    } 
+    else {
+      throw std::runtime_error("vbvc_axis must be x, y, z (or 0, 1, 2)");
+    }
+  }
+
+  //! Set vb-vc axis vector (components will be normalized)
+  void setVbvcAxisVector(T x, T y, T z) {
+    Coordinate<T> axis(x, y, z);
+    T norm = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    if (norm <= 0) {
+      throw std::runtime_error("vbvc_axis_vector must be non-zero");
+    }
+    vbvcAxisVector = axis / norm;
+    vbvcAxisVectorEnabled = true;
+    logging::entry() << "Applying vb-vc bulk velocity along vector ("
+                     << vbvcAxisVector.x << ", " << vbvcAxisVector.y << ", " << vbvcAxisVector.z
+                     << ")" << std::endl;
+  }
+
+  //! Set scaling for vb-vc velocity perturbation in grafic output
+  void setVbvcSigmaMultiplier(T multiplier) {
+    if (multiplier < 0) {
+      throw std::runtime_error("vbvc_sigma must be >= 0");
+    }
+    vbvcSigmaMultiplier = multiplier;
+    logging::entry() << "Grafic vb-vc velocity perturbation sigma multiplier set to "
+                     << vbvcSigmaMultiplier << endl;
+  }
+
+  //! Override vb-vc velocity amplitude in km/s (when enabled)
+  void setVbvcVelocityOverrideKms(T velocityKms) {
+    if (velocityKms < 0) {
+      throw std::runtime_error("vbvc_velocity_kms must be >= 0");
+    }
+    vbvcVelocityOverrideKms = velocityKms;
+    logging::entry() << "Grafic vb-vc velocity override set to "
+                     << velocityKms << " km/s" << endl;
+  }
+
+  //! Set whether to always write extra grafic fields (developer mode)
+  void setWriteExtraGraficFields(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->writeExtraGraficFields = true;
+      logging::entry() << "Grafic extra fields: enabled, writing additional IC fields anyway" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->writeExtraGraficFields = false;
+      logging::entry() << "Grafic extra fields: disabled" << endl;
+    } else {
+      throw std::runtime_error("write_extra_grafic_fields must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set whether to dump the white noise field before applying the power spectrum.
+  void setDumpWhiteNoise(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      dumpWhiteNoiseField = true;
+      logging::entry() << "White noise field output: enabled" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      dumpWhiteNoiseField = false;
+      logging::entry() << "White noise field output: disabled" << endl;
+    } else {
+      throw std::runtime_error("dump_whitenoise must be true/false (or 1/0)");
     }
   }
 
@@ -744,7 +890,9 @@ public:
   * \param cambFieldPath - string of path to CAMB file
   */
   void setCambDat(std::string cambFilePath) {
-    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath);
+    spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath,
+                                                               isocurvatureEnabled,
+                                                               applyVbvcVelocity);
     this->multiLevelContext.setPowerspectrumGenerator(*spectrum);
   }
 
@@ -954,6 +1102,22 @@ public:
     field.toFourier();
     fields::Field<complex<T>, T> fieldToWrite = tools::numerics::fourier::getComplexFourierField(field.getFieldForLevel(level));
     dumpGridData(level, fieldToWrite);
+  }
+
+  //! Dumps the white noise field for all levels (if still in white noise form).
+  void dumpWhiteNoiseFields() {
+    if (outputFields.empty()) {
+      throw std::runtime_error("No output fields available to dump white noise.");
+    }
+    if (outputFields[0]->getTransferType() != particle::species::whitenoise) {
+      throw std::runtime_error("White noise field can only be dumped before the power spectrum is applied.");
+    }
+
+    outputFields[0]->toReal();
+    const std::string prefix = "grid_whitenoise";
+    for (size_t level = 0; level < outputFields[0]->getNumLevels(); ++level) {
+      dumpGridData(level, outputFields[0]->getFieldForLevel(level), prefix);
+    }
   }
 
   //! Dumps power spectrum generated from the field and the theory at a given level in a .ps file
@@ -1344,6 +1508,8 @@ public:
 
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
+                     applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier, vbvcAxisVectorEnabled,
+                     vbvcAxisVector, vbvcVelocityOverrideKms, writeExtraGraficFields,
                      pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
@@ -1668,6 +1834,10 @@ public:
 
     if (modificationManager.hasModifications())
       applyModifications();
+
+    if (dumpWhiteNoiseField) {
+      dumpWhiteNoiseFields();
+    }
 
     write();
   }

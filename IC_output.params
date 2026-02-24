@@ -1,0 +1,41 @@
+# genetIC v1.5.0, compiled: Jan 28 2026, 21:22:44
+#                  runtime: Jan 28 2026, 21:24:20
+
+# git HEAD:9f73b0c
+# At the time of compilation, the following files had been modified:
+#   example/paramfile.txt
+#   genetIC/IC_output.params
+#   genetIC/genetIC
+#   genetIC/genetIC_mapper
+#   genetIC/src/.ipynb_checkpoints/ic-checkpoint.hpp
+#   genetIC/src/bindings.hpp
+#   genetIC/src/ic.hpp
+#   tools/transfer_function/planck_2018.ini
+ob 0.0494 
+om 0.3158 
+ol 0.6842 
+s8 0.8117 
+ns 0.966 
+hubble 0.6732 
+z 127 
+camb planck_2018_transfer_out.dat 
+random_seed 8896131 
+isocurvature true 
+vbvc_velocity true 
+vbvc_axis 0 
+vbvc_sigma 1 
+vbvc_velocity_kms 10 
+write_extra_grafic_fields true 
+outname test 
+outdir /home/kbgj57/genetIC/example/iso/ 
+outformat grafic 
+base_grid 25 128 
+centre 12.5 12.5 12.5 
+select_sphere 2 
+zoom_grid 3 128 
+dump_whitenoise 0 
+dump_whitenoise 1 
+done 
+dump_ps 1 
+dump_ps 1 
+dump_grid 1 

@@ -1,0 +1,85 @@
+# Example genetIC parameter file
+
+# Cosmology, based on Planck 2018
+Ob           0.0494
+Om           0.3158
+Ol           0.6842
+s8           0.8117
+ns           0.9660
+hubble       0.6732
+z            127
+
+# Seed the field using the default algorithm (parallel Fourier space):
+random_seed	8896131
+
+#enable isocurvature perturbations in the initial conditions allowing for 
+isocurvature true
+
+#perturb CDM velocities along one axis by an amount equal to the variance of the vbvc field at the starting redshift.
+vbvc_velocity true
+
+#axis for velocity perturbation 0,1,2 : x,y,z
+vbvc_axis 0
+
+# multiplicative factor by which to rescale the calculated relative velocity 
+vbvc_sigma 1.0
+
+#override calculated relative velocity, set to None for 
+vbvc_velocity_kms 10.0
+
+#define a more complex direction for the relative velocity. 
+#vbvc_axis_vector 1 0 1
+
+#write extra grafic outputs regardless of whether isocurvature or relative velocities enabled.
+write_extra_grafic_fields true
+
+# Specify output directory:
+outname test
+outdir	 /home/kbgj57/genetIC/example/iso/
+
+# Pick output format:
+outformat grafic
+
+#dump_grid 1 # <-- for the base grid
+
+# Specify the base-level grid, 50 Mpc/h, 128 cells on a side:
+base_grid 25.0 128
+
+# Prepare to "zoom" all particles within a sphere radius 6 Mpc/h, centred
+# on the coordinate 32.5,32.5,32.5 Mpc/h:
+centre 12.5 12.5 12.5
+select_sphere 2
+
+# Note that instead of defining the zoom region geometrically in the above way,
+# we could also have used id_file (see below) to load particle IDs to
+# replace with zoom particles
+
+# Now open the zoom region. Make the zoom grid itself a factor 3
+# smaller than the base grid, and have 128 cells on a side (thus
+# an equivalent resolution to (3x128)=384 on a side):
+zoom_grid 3 128
+
+# Enable alpha k-range options to restrict integral to simulation modes:
+# k_min = 2*pi/boxsize, k_max = pi/dx (finest grid Nyquist)
+alpha_k_limits_from_boxsize true
+alpha_k_max_from_grid true
+
+# Import transfer function data.
+# NOTE: This must come AFTER grid setup when using alpha_k_max_from_grid
+camb	planck_2018_transfer_out.dat
+
+# ...  modifications could be added here ...
+
+# Initialise the random component, apply modifications, and write the
+# resulting initial conditions:
+dump_whitenoise 0 # <-- for the base grid
+dump_whitenoise 1 # <-- for the base grid
+done
+
+# Optionally, write diagnostic output --
+# Dark matter power spectrum:
+dump_ps 1 # <-- the power spectrum evaluated on the base grid
+dump_ps 1 # <-- the power spectrum evaluated on the first zoom region
+# Numpy array with the overdensity on a grid:
+dump_grid 1 # <-- for the base grid
+#dump_grid 1 # <-- for the first zoom region

@@ -13,6 +13,8 @@
 #include <cctype>
 #include <stdexcept>
 #include <sstream>
+#include <cmath>
+#include <optional>
 
 #include "tools/numerics/vectormath.hpp"
 #include "tools/numerics/fourier.hpp"
@@ -162,6 +164,32 @@ protected:
   //! Axis for vb-vc velocity perturbation in grafic output (0=x,1=y,2=z).
   int vbvcAxis = 0;
 
+  //! Scale factor for vb-vc velocity perturbation (multiples of sigma).
+  T vbvcSigmaMultiplier = 1.0;
+
+  //! vb-vc velocity perturbation axis vector (normalized).
+  Coordinate<T> vbvcAxisVector = {1.0, 0.0, 0.0};
+
+  //! Whether to use vb-vc axis vector instead of axis index.
+  bool vbvcAxisVectorEnabled = false;
+
+  //! Optional override for vb-vc velocity amplitude in km/s.
+  std::optional<T> vbvcVelocityOverrideKms;
+
+  //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
+  bool writeExtraGraficFields = false;
+
+  //! If true, use boxsize-derived k_min and user-specified k_max for alpha calculation
+  //! instead of using all k modes from the CAMB table.
+  bool alphaKLimitsFromBoxsize = false;
+
+  //! Maximum k value (h/Mpc) for alpha calculation when alphaKLimitsFromBoxsize is true.
+  //! k_min is always 2*pi/boxsize (fundamental mode) when this mode is enabled.
+  T alphaKMax = 100.0;
+
+  //! If true, calculate alpha k_max from the finest grid's Nyquist frequency instead of using alphaKMax.
+  bool alphaKMaxFromGrid = false;
+
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
 
@@ -294,7 +322,10 @@ public:
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->isocurvatureEnabled = true;
-      logging::entry() << "Isocurvature-specific Grafic mass fractions: enabled" << endl;
+      logging::entry() << "Isocurvature-specific Grafic mass fractions enabled, perturbing baryon and CDM density fields accordingly" << endl;
+      logging::entry(logging::warning)
+        << "WARNING: isocurvature modifies baryon/CDM density fields and mass fractions in Grafic output."
+        << endl;
       auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
       if (cambSpectrum != nullptr) {
         cambSpectrum->computeIsocurvatureAlpha();
@@ -314,7 +345,10 @@ public:
 
     if (flag == "1" || flag == "true" || flag == "on") {
       this->applyVbvcVelocity = true;
-      logging::entry() << "Grafic vb-vc velocity perturbation: enabled" << endl;
+      logging::entry() << "Grafic vb-vc velocity perturbation enabled, imposing bulk baryon-CDM relative velocity" << endl;
+      logging::entry(logging::warning)
+        << "WARNING: vb-vc applies a bulk CDM velocity offset in Grafic output only."
+        << endl;
       auto cambSpectrum = dynamic_cast<cosmology::CAMB<GridDataType>*>(spectrum.get());
       if (cambSpectrum != nullptr) {
         cambSpectrum->computeVbvcVariance();
@@ -330,16 +364,127 @@ public:
 
   //! Set axis along which to apply vb-vc velocity perturbation in grafic output
   void setVbvcAxis(std::string axis) {
-    std::transform(axis.begin(), axis.end(), axis.begin(), [](unsigned char c) { return std::tolower(c); });
+    std::transform(axis.begin(), axis.end(), axis.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
 
     if (axis == "x" || axis == "0") {
       vbvcAxis = 0;
-    } else if (axis == "y" || axis == "1") {
+      vbvcAxisVectorEnabled = false;
+      logging::entry() << "Applying vb-vc bulk velocity along X axis (0)" << std::endl;
+    } 
+    else if (axis == "y" || axis == "1") {
       vbvcAxis = 1;
-    } else if (axis == "z" || axis == "2") {
+      vbvcAxisVectorEnabled = false;
+      logging::entry() << "Applying vb-vc bulk velocity along Y axis (1)" << std::endl;
+    } 
+    else if (axis == "z" || axis == "2") {
       vbvcAxis = 2;
-    } else {
+      vbvcAxisVectorEnabled = false;
+      logging::entry() << "Applying vb-vc bulk velocity along Z axis (2)" << std::endl;
+    } 
+    else {
       throw std::runtime_error("vbvc_axis must be x, y, z (or 0, 1, 2)");
+    }
+  }
+
+  //! Set vb-vc axis vector (components will be normalized)
+  void setVbvcAxisVector(T x, T y, T z) {
+    Coordinate<T> axis(x, y, z);
+    T norm = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+    if (norm <= 0) {
+      throw std::runtime_error("vbvc_axis_vector must be non-zero");
+    }
+    vbvcAxisVector = axis / norm;
+    vbvcAxisVectorEnabled = true;
+    logging::entry() << "Applying vb-vc bulk velocity along vector ("
+                     << vbvcAxisVector.x << ", " << vbvcAxisVector.y << ", " << vbvcAxisVector.z
+                     << ")" << std::endl;
+  }
+
+  //! Set scaling for vb-vc velocity perturbation in grafic output
+  void setVbvcSigmaMultiplier(T multiplier) {
+    if (multiplier < 0) {
+      throw std::runtime_error("vbvc_sigma must be >= 0");
+    }
+    vbvcSigmaMultiplier = multiplier;
+    logging::entry() << "Grafic vb-vc velocity perturbation sigma multiplier set to "
+                     << vbvcSigmaMultiplier << endl;
+  }
+
+  //! Override vb-vc velocity amplitude in km/s (when enabled)
+  void setVbvcVelocityOverrideKms(T velocityKms) {
+    if (velocityKms < 0) {
+      throw std::runtime_error("vbvc_velocity_kms must be >= 0");
+    }
+    vbvcVelocityOverrideKms = velocityKms;
+    logging::entry() << "Grafic vb-vc velocity override set to "
+                     << velocityKms << " km/s" << endl;
+  }
+
+  //! Set whether to always write extra grafic fields (developer mode)
+  void setWriteExtraGraficFields(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->writeExtraGraficFields = true;
+      logging::entry() << "Grafic extra fields: enabled, writing additional IC fields anyway" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->writeExtraGraficFields = false;
+      logging::entry() << "Grafic extra fields: disabled" << endl;
+    } else {
+      throw std::runtime_error("write_extra_grafic_fields must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set whether to use boxsize-derived k_min for alpha calculation
+  /*!
+   * When enabled, the alpha calculation uses k_min = 2*pi/boxsize (the fundamental mode)
+   * and k_max specified by alpha_k_max (default 100 h/Mpc), instead of using all k modes
+   * from the CAMB transfer function table.
+   */
+  void setAlphaKLimitsFromBoxsize(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->alphaKLimitsFromBoxsize = true;
+      logging::entry() << "Alpha k-limits from boxsize: enabled" << endl;
+      logging::entry() << "  k_min will be set to 2*pi/boxsize (fundamental mode)" << endl;
+      logging::entry() << "  k_max is set to " << alphaKMax << " h/Mpc (use alpha_k_max to change)" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->alphaKLimitsFromBoxsize = false;
+      logging::entry() << "Alpha k-limits from boxsize: disabled (using full CAMB k-range)" << endl;
+    } else {
+      throw std::runtime_error("alpha_k_limits_from_boxsize must be true/false (or 1/0)");
+    }
+  }
+
+  //! Set maximum k value (h/Mpc) for alpha calculation when alpha_k_limits_from_boxsize is enabled
+  void setAlphaKMax(T kmax) {
+    if (kmax <= 0) {
+      throw std::runtime_error("alpha_k_max must be > 0");
+    }
+    this->alphaKMax = kmax;
+    this->alphaKMaxFromGrid = false;  // explicit k_max overrides grid-derived
+    logging::entry() << "Alpha k_max set to " << kmax << " h/Mpc (hardcoded value)" << endl;
+  }
+
+  //! Set whether to derive alpha k_max from the finest grid's Nyquist frequency
+  /*!
+   * When enabled, k_max = π/dx where dx is the cell size of the finest (deepest) grid.
+   * This corresponds to the Nyquist frequency of the finest resolution in the simulation.
+   * When disabled, the hardcoded value from alpha_k_max is used (default: 100 h/Mpc).
+   */
+  void setAlphaKMaxFromGrid(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->alphaKMaxFromGrid = true;
+      logging::entry() << "Alpha k_max will be derived from finest grid Nyquist frequency (pi/dx)" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->alphaKMaxFromGrid = false;
+      logging::entry() << "Alpha k_max will use hardcoded value: " << alphaKMax << " h/Mpc" << endl;
+    } else {
+      throw std::runtime_error("alpha_k_max_from_grid must be true/false (or 1/0)");
     }
   }
 
@@ -790,9 +935,33 @@ public:
   * \param cambFieldPath - string of path to CAMB file
   */
   void setCambDat(std::string cambFilePath) {
+    // Compute k_min from boxsize if base grid is initialized and alphaKLimitsFromBoxsize is enabled
+    T kmin_alpha = -1.0;  // negative means use full CAMB range
+    T kmax_alpha = -1.0;
+    if (alphaKLimitsFromBoxsize && multiLevelContext.getNumLevels() > 0) {
+      T boxsize = multiLevelContext.getGridForLevel(0).thisGridSize;
+      kmin_alpha = 2.0 * M_PI / boxsize;  // fundamental mode
+
+      // Determine k_max: either from finest grid Nyquist or hardcoded value
+      if (alphaKMaxFromGrid) {
+        // Get the finest (deepest) grid's Nyquist frequency
+        size_t finestLevel = multiLevelContext.getNumLevels() - 1;
+        kmax_alpha = multiLevelContext.getGridForLevel(finestLevel).getFourierKmax();
+        logging::entry() << "Alpha k_max derived from finest grid (level " << finestLevel << ") Nyquist frequency" << endl;
+      } else {
+        kmax_alpha = alphaKMax;
+      }
+      logging::entry() << "Alpha calculation will use k-range: [" << kmin_alpha << ", " << kmax_alpha << "] h/Mpc" << endl;
+    } else if (alphaKLimitsFromBoxsize && multiLevelContext.getNumLevels() == 0) {
+      logging::entry(logging::warning) << "WARNING: alpha_k_limits_from_boxsize is enabled but base_grid not yet defined." << endl;
+      logging::entry(logging::warning) << "         Alpha will use full CAMB k-range. Define base_grid before camb to use boxsize-derived k_min." << endl;
+    }
+
     spectrum = std::make_unique<cosmology::CAMB<GridDataType>>(this->cosmology, cambFilePath,
                                                                isocurvatureEnabled,
-                                                               applyVbvcVelocity);
+                                                               applyVbvcVelocity,
+                                                               kmin_alpha,
+                                                               kmax_alpha);
     this->multiLevelContext.setPowerspectrumGenerator(*spectrum);
   }
 
@@ -973,6 +1142,11 @@ public:
   * \param species - the field to dump
   */
   virtual void dumpGrid(size_t level, particle::species species ) {
+    if (species == particle::species::baryon) {
+      logging::entry() << "Dumping baryon grid field for level " << level << std::endl;
+    } else {
+      logging::entry() << "Dumping grid field for level " << level << std::endl;
+    }
     auto & field = this->getOutputFieldForSpecies(species);
     field.toReal();
     dumpGridData(level, field.getFieldForLevel(level));
@@ -989,6 +1163,17 @@ public:
   virtual void dumpVelocityX(size_t level) {
     dumpGridData(level, *(this->pParticleGenerator[particle::species::dm]->getGeneratorForLevel(
       level).getGeneratedFields()[0]), "vx");
+  }
+
+  //! Dumps white noise field at a given level to file
+  /*!
+  * \param level - level in the grid hierarchy to dump
+  */
+  virtual void dumpWhiteNoise(size_t level) {
+    logging::entry() << "Dumping white noise field for level " << level << std::endl;
+    initialiseRandomComponentIfUninitialised();
+    outputFields[0]->toReal();
+    dumpGridData(level, outputFields[0]->getFieldForLevel(level), "whitenoise");
   }
 
   //! For backwards compatibility. Dumpts baryons to field at requested level to file named grid-level.
@@ -1018,8 +1203,10 @@ public:
     std::string filename;
     if (species == particle::species::baryon) {
       filename = (getOutputPath() + "_" + ((char) (level + '0')) + "_baryons.ps");
+      logging::entry() << "Dumping baryon power spectrum for level " << level << std::endl;
     } else {
       filename = (getOutputPath() + "_" + ((char) (level + '0')) + ".ps");
+      logging::entry() << "Dumping power spectrum for level " << level << std::endl;
     }
 
     if(!useBaryonTransferFunction)
@@ -1392,7 +1579,8 @@ public:
 
         grafic::save(getOutputPath() + ".grafic",
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
-                     applyVbvcVelocity, vbvcAxis,
+                     applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier, vbvcAxisVectorEnabled,
+                     vbvcAxisVector, vbvcVelocityOverrideKms, writeExtraGraficFields,
                      pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;
