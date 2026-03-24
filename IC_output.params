@@ -1,41 +1,43 @@
-# genetIC v1.5.0, compiled: Jan 28 2026, 21:22:44
-#                  runtime: Jan 28 2026, 21:24:20
+# genetIC v1.5.0, compiled: Feb 25 2026, 23:58:16
+#                  runtime: Feb 26 2026, 12:21:07
 
-# git HEAD:9f73b0c
+# git HEAD:e9f8206
 # At the time of compilation, the following files had been modified:
-#   example/paramfile.txt
-#   genetIC/IC_output.params
-#   genetIC/genetIC
-#   genetIC/genetIC_mapper
-#   genetIC/src/.ipynb_checkpoints/ic-checkpoint.hpp
-#   genetIC/src/bindings.hpp
-#   genetIC/src/ic.hpp
-#   tools/transfer_function/planck_2018.ini
+#   IC_output.params
+#   genetIC
+#   genetIC_mapper
+#   src/bindings.hpp
+#   src/cosmology/camb.hpp
+#   src/ic.hpp
+#   src/io/grafic.hpp
+#   
 ob 0.0494 
 om 0.3158 
 ol 0.6842 
 s8 0.8117 
 ns 0.966 
 hubble 0.6732 
-z 127 
-camb planck_2018_transfer_out.dat 
+z 0 
 random_seed 8896131 
+base_grid 25 512 
+alpha_k_limits_from_boxsize true 
+alpha_k_max 50 
+camb planck_2018_transfer_out.dat 
 isocurvature true 
 vbvc_velocity true 
 vbvc_axis 0 
-vbvc_sigma 1 
-vbvc_velocity_kms 10 
+vbvc_sigma 3 
 write_extra_grafic_fields true 
+write_matter_density true 
+write_grafic_whitenoise true 
 outname test 
-outdir /home/kbgj57/genetIC/example/iso/ 
+outdir /cosma7/data/dp004/dc-jess1/EDGE/GenetIC/iso_512/ 
 outformat grafic 
-base_grid 25 128 
-centre 12.5 12.5 12.5 
-select_sphere 2 
-zoom_grid 3 128 
+centre 0 0 0 
+select_sphere 1.25 
+zoom_grid 2 512 
 dump_whitenoise 0 
 dump_whitenoise 1 
 done 
+dump_ps 0 
 dump_ps 1 
-dump_ps 1 
-dump_grid 1 

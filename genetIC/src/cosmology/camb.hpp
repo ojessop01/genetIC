@@ -414,7 +414,7 @@ namespace cosmology {
       CoordinateType ourGrowthFactor = growthFactor(cosmology_);
       CoordinateType growthFactorNormalized = ourGrowthFactor / growthFactor(cosmologyAtRedshift(cosmology_, 0));
       
-      const CoordinateType alpha = alpha_z0 / growthFactorNormalized // Rescale alpha to IC redshift
+      const CoordinateType alpha = alpha_z0 / growthFactorNormalized; // Rescale alpha to IC redshift
     
       logging::entry() << "Computed isocurvature alpha coefficient (z=0) = " << alpha_z0 << std::endl;
 
@@ -484,19 +484,21 @@ namespace cosmology {
       //
       // Multiply by c to convert dimensionless transfer → km/s,
       // and multiply by (1+z) for the linear redshift evolution of v_bc.
-      const CoordinateType sigma =
+      const CoordinateType sigma0 =
         (variance > 0)
-          ? std::sqrt(variance) * C_KMS * (static_cast<CoordinateType>(1) + cosmology_.redshift)
+          ? std::sqrt(variance) * C_KMS
           : static_cast<CoordinateType>(0);
-    
+
+      const CoordinateType sigma =
+        sigma0 * (static_cast<CoordinateType>(1) + cosmology_.redshift);
+
       // Latex-friendly logging output
       logging::entry()
-        << "Computed v_bc RMS:"
-        << "(z=)" << cosmology_.redshift
-        << "=" << sigma
-        << "km/s"
+        << "Computed v_bc RMS: "
+        << "\\sigma_0 = " << sigma0 << " \\, \\mathrm{km\\,s^{-1}}, "
+        << "\\sigma(z=" << cosmology_.redshift << ") = " << sigma << " \\, \\mathrm{km\\,s^{-1}}"
         << std::endl;
-    
+
       return sigma;
     }
 

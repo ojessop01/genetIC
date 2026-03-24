@@ -179,6 +179,12 @@ protected:
   //! If true, always write extra Grafic fields even if isocurvature/vbvc are disabled.
   bool writeExtraGraficFields = false;
 
+  //! If true, write matter overdensity to ic_deltam in grafic output.
+  bool writeMatterDensity = false;
+
+  //! If true, write white noise field to ic_whitenoise in grafic output.
+  bool writeGraficWhiteNoise = false;
+
   //! If true, use boxsize-derived k_min and user-specified k_max for alpha calculation
   //! instead of using all k modes from the CAMB table.
   bool alphaKLimitsFromBoxsize = false;
@@ -189,6 +195,9 @@ protected:
 
   //! If true, calculate alpha k_max from the finest grid's Nyquist frequency instead of using alphaKMax.
   bool alphaKMaxFromGrid = false;
+
+  //! Optional override for isocurvature alpha coefficient.
+  std::optional<T> alphaOverride;
 
   //! High-pass filtering scale defined for variance calculations
   T variance_filterscale = -1.0;
@@ -330,6 +339,7 @@ public:
       if (cambSpectrum != nullptr) {
         cambSpectrum->computeIsocurvatureAlpha();
       }
+      applyAlphaOverrideIfSet();
     } else if (flag == "0" || flag == "false" || flag == "off") {
       this->isocurvatureEnabled = false;
       cosmology::isocurvature_alpha() = 0.0;
@@ -436,6 +446,32 @@ public:
     }
   }
 
+  //! Enable writing matter overdensity (deltam) to ic_deltam in grafic output
+  void setWriteMatterDensity(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->writeMatterDensity = true;
+      logging::entry() << "Matter density output: enabled, will write ic_deltam" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->writeMatterDensity = false;
+    } else {
+      throw std::runtime_error("write_matter_density must be true/false (or 1/0)");
+    }
+  }
+
+  //! Enable writing white noise field to ic_whitenoise in grafic output
+  void setWriteGraficWhiteNoise(std::string flag) {
+    std::transform(flag.begin(), flag.end(), flag.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (flag == "1" || flag == "true" || flag == "on") {
+      this->writeGraficWhiteNoise = true;
+      logging::entry() << "Grafic white noise output: enabled, will write ic_whitenoise" << endl;
+    } else if (flag == "0" || flag == "false" || flag == "off") {
+      this->writeGraficWhiteNoise = false;
+    } else {
+      throw std::runtime_error("write_grafic_whitenoise must be true/false (or 1/0)");
+    }
+  }
+
   //! Set whether to use boxsize-derived k_min for alpha calculation
   /*!
    * When enabled, the alpha calculation uses k_min = 2*pi/boxsize (the fundamental mode)
@@ -486,6 +522,17 @@ public:
     } else {
       throw std::runtime_error("alpha_k_max_from_grid must be true/false (or 1/0)");
     }
+  }
+
+  //! Override the computed isocurvature alpha coefficient.
+  void setAlphaOverride(T alpha) {
+    if (!std::isfinite(alpha)) {
+      throw std::runtime_error("alpha_override must be finite");
+    }
+
+    alphaOverride = alpha;
+    cosmology::isocurvature_alpha() = static_cast<double>(alpha);
+    logging::entry() << "Isocurvature alpha override set to " << alpha << endl;
   }
 
   //! Enables outputting baryons on all levels, rather than only the deepest level.
@@ -962,6 +1009,9 @@ public:
                                                                applyVbvcVelocity,
                                                                kmin_alpha,
                                                                kmax_alpha);
+
+    applyAlphaOverrideIfSet();
+
     this->multiLevelContext.setPowerspectrumGenerator(*spectrum);
   }
 
@@ -1018,6 +1068,13 @@ public:
   void initialiseRandomComponentIfUninitialised() {
     if (!haveInitialisedRandomComponent) {
       initialiseAllRandomComponents();
+    }
+  }
+
+  void applyAlphaOverrideIfSet() {
+    if (alphaOverride.has_value() && isocurvatureEnabled) {
+      cosmology::isocurvature_alpha() = static_cast<double>(*alphaOverride);
+      logging::entry() << "Using alpha override: " << *alphaOverride << endl;
     }
   }
 
@@ -1535,6 +1592,13 @@ public:
     using namespace io;
 
     initialiseRandomComponentIfUninitialised();
+
+    std::shared_ptr<fields::OutputField<GridDataType>> whiteNoiseForOutput = nullptr;
+    if (writeGraficWhiteNoise && outputFormat == OutputFormat::grafic) {
+      whiteNoiseForOutput = std::make_shared<fields::OutputField<GridDataType>>(*outputFields[0]);
+      whiteNoiseForOutput->toReal();
+    }
+
     applyPowerSpec();
     ensureParticleGeneratorInitialised();
 
@@ -1581,6 +1645,7 @@ public:
                      pParticleGenerator, multiLevelContext, cosmology, isocurvatureEnabled,
                      applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier, vbvcAxisVectorEnabled,
                      vbvcAxisVector, vbvcVelocityOverrideKms, writeExtraGraficFields,
+                     writeMatterDensity, writeGraficWhiteNoise, whiteNoiseForOutput,
                      pvarValue, centre,
                      subsample, supersample, zoomParticleArray, outputFields);
         break;

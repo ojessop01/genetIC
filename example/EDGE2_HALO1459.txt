@@ -1,0 +1,88 @@
+# Andrew's param for void sim Halo1459
+
+Om 0.3086
+Ol 0.6914
+s8 0.8288
+ns 0.9611
+hubble 0.6777
+zin 99
+
+seedfourier_reverse 1701
+
+# Alpha k-range settings:
+
+# By default, alpha (the baryon-CDM correlation coefficient) is calculated using
+# all k-modes provided by the CAMB transfer function table.
+# 
+# If alpha_k_limits_from_boxsize is enabled:
+#   - k_min is set to 2*pi/boxsize (the fundamental mode of the simulation box)
+#   - k_max is determined by one of two methods (see below)
+# This restricts the alpha integral to modes actually present in your simulation.
+# NOTE: base_grid (and zoom_grid if using alpha_k_max_from_grid) must be defined BEFORE camb.
+#
+
+alpha_k_limits_from_boxsize true
+#
+# k_max can be set in two ways:
+#   1. Hardcoded value (default): use alpha_k_max to specify a fixed value in h/Mpc
+alpha_k_max 50.0
+#
+#   2. Grid-derived Nyquist frequency: use alpha_k_max_from_grid to calculate k_max
+#      from the finest (deepest) grid's Nyquist frequency: k_max = pi/dx
+#      where dx is the cell size of the finest zoom region.
+#alpha_k_max_from_grid false
+#
+# If both are specified, alpha_k_max_from_grid takes precedence when enabled.
+
+# Import transfer function data.
+# If you change the cosmological parameters above be sure to update the transfer
+# function accordingly. Some help is given in the folder tools/transfer_function/
+# within the genetIC distribution
+
+camb /cosma7/data/dp004/dc-jess1/EDGE/transfer_function/planck15_transfer_out_z0.dat
+
+# Enable isocurvature perturbations in the initial conditions using method outlined in Jessop et al. 2025
+# NOTE: Must be set AFTER camb is loaded
+isocurvature true
+
+#perturb CDM velocities along one axis by an amount equal to the variance of the vbvc field at the starting redshift.
+vbvc_velocity true
+
+#axis for velocity perturbation 0,1,2 : x,y,z
+vbvc_axis 0
+
+# multiplicative factor by which to rescale the calculated relative velocity 
+vbvc_sigma 3.0
+
+#override calculated relative velocity, set to None for the code to calculate at IC redshift instead assuming 1+z backscaling from z=0
+vbvc_velocity_kms 9.291
+
+#write extra grafic outputs regardless of whether isocurvature or relative velocities enabled.
+write_extra_grafic_fields true
+
+# Write matter overdensity (deltam = fb*deltab + fcdm*deltac) to ic_deltam:
+write_matter_density true
+
+outdir /cosma7/data/dp004/dc-jess1/EDGE/halo1459_M2e9_quiet_filament/FIDUCIAL_VREL_DELTA_BC/ICs
+outname edge_h1459
+outformat 5
+center_grafic_output
+subsample 2
+supersample 4
+pvar 0.00002
+
+basegrid 33.885 512
+
+centre 28.15 16.95 10.15
+select_cube 7.8 # < 33.885/4.1
+zoomgrid 4 512
+
+IDfile /cosma7/data/dp004/dc-jess1/EDGE/halo1459_M2e9_quiet_filament/initfiles/halo_1459.txt
+zoomgrid 4 512
+
+modify vx absolute 0.0
+modify vy absolute 0.0
+modify vz absolute 0.0
+
+done
+

@@ -59,6 +59,7 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     dispatch.add_class_route("center_output", &ICType::setCenteringOnRegion);
 
     dispatch.add_class_route("isocurvature", &ICType::setIsocurvature);
+    dispatch.add_class_route("alpha_override", &ICType::setAlphaOverride);
     dispatch.add_class_route("alpha_k_limits_from_boxsize", &ICType::setAlphaKLimitsFromBoxsize);
     dispatch.add_class_route("alpha_k_max", &ICType::setAlphaKMax);
     dispatch.add_class_route("alpha_k_max_from_grid", &ICType::setAlphaKMaxFromGrid);
@@ -68,6 +69,8 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     dispatch.add_class_route("vbvc_sigma", &ICType::setVbvcSigmaMultiplier);
     dispatch.add_class_route("vbvc_velocity_kms", &ICType::setVbvcVelocityOverrideKms);
     dispatch.add_class_route("write_extra_grafic_fields", &ICType::setWriteExtraGraficFields);
+    dispatch.add_class_route("write_matter_density", &ICType::setWriteMatterDensity);
+    dispatch.add_class_route("write_grafic_whitenoise", &ICType::setWriteGraficWhiteNoise);
     // Gadget options
     dispatch.add_class_route("gadget_particle_type", &ICType::setGadgetParticleType);
     dispatch.add_class_route("gadget_flagged_particle_type", &ICType::setFlaggedGadgetParticleType);

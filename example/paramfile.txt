@@ -1,20 +1,18 @@
 # Example genetIC parameter file
 
-# Cosmology, based on Planck 2018
-Ob           0.0494
-Om           0.3158
-Ol           0.6842
-s8           0.8117
-ns           0.9660
-hubble       0.6732
-z            127
+Om 0.3086
+Ol 0.6914
+s8 0.8288
+ns 0.9611
+hubble 0.6777
+zin 99
 
-# Seed the field using the default algorithm (parallel Fourier space):
-random_seed	8896131
+# Seed for any other random operations (white noise itself is imported below)
+random_seed  8896131
 
 # Specify the base-level grid, 25 Mpc/h, 128 cells on a side:
 # NOTE: This must be defined BEFORE camb if using alpha_k_limits_from_boxsize
-base_grid 25.0 128
+base_grid 25.0 256
 
 # Alpha k-range settings:
 # By default, alpha (the baryon-CDM correlation coefficient) is calculated using
@@ -30,7 +28,7 @@ alpha_k_limits_from_boxsize true
 #
 # k_max can be set in two ways:
 #   1. Hardcoded value (default): use alpha_k_max to specify a fixed value in h/Mpc
-alpha_k_max 50.0
+alpha_k_max 10.0
 #
 #   2. Grid-derived Nyquist frequency: use alpha_k_max_from_grid to calculate k_max
 #      from the finest (deepest) grid's Nyquist frequency: k_max = pi/dx
@@ -43,14 +41,18 @@ alpha_k_max 50.0
 # If you change the cosmological parameters above be sure to update the transfer
 # function accordingly. Some help is given in the folder tools/transfer_function/
 # within the genetIC distribution
-camb	planck_2018_transfer_out.dat
+camb /cosma7/data/dp004/dc-jess1/EDGE/transfer_function/planck15_transfer_out_z0.dat
 
 # Enable isocurvature perturbations in the initial conditions using method outlined in Jessop et al. 2025
 # NOTE: Must be set AFTER camb is loaded
-isocurvature false
+isocurvature true
+
+# Optional: override the computed baryon-CDM correlation coefficient alpha.
+# If set, this value takes precedence over the CAMB-computed alpha.
+alpha_override -0.36321
 
 #perturb CDM velocities along one axis by an amount equal to the variance of the vbvc field at the starting redshift.
-vbvc_velocity false
+vbvc_velocity true
 
 #axis for velocity perturbation 0,1,2 : x,y,z
 vbvc_axis 0
@@ -59,7 +61,7 @@ vbvc_axis 0
 vbvc_sigma 3.0
 
 #override calculated relative velocity, set to None for the code to calculate at IC redshift instead assuming 1+z backscaling from z=0
-#vbvc_velocity_kms 10.0
+vbvc_velocity_kms 9.291
 
 #define a more complex direction for the relative velocity. 
 #vbvc_axis_vector 1 0 1
@@ -67,17 +69,23 @@ vbvc_sigma 3.0
 #write extra grafic outputs regardless of whether isocurvature or relative velocities enabled.
 write_extra_grafic_fields true
 
+# Write matter overdensity (deltam = fb*deltab + fcdm*deltac) to ic_deltam:
+write_matter_density true
+
+# Write white noise field (before power spectrum applied) to ic_whitenoise:
+write_grafic_whitenoise true
+
 # Specify output directory:
-outname test
-outdir	 /home/kbgj57/genetIC/example/no-iso/
+outname test_ic
+outdir /cosma/apps/durham/dc-jess1/genetIC/example/ICs
 
 # Pick output format:
 outformat grafic
 
 # Prepare to "zoom" all particles within a sphere radius 2 Mpc/h, centred
 # on the coordinate 32.5,32.5,32.5 Mpc/h:
-#centre 12.5 12.5 12.5
-#select_sphere 2
+centre 0 0 0 
+select_sphere 1.25
 
 # Note that instead of defining the zoom region geometrically in the above way,
 # we could also have used id_file (see below) to load particle IDs to
@@ -86,26 +94,20 @@ outformat grafic
 # Now open the zoom region. Make the zoom grid itself a factor 3
 # smaller than the base grid, and have 128 cells on a side (thus
 # an equivalent resolution to (3x128)=384 on a side):
-#zoom_grid 3 128
+zoom_grid 2 256
 
 # ...  modifications could be added here ...
 
 # Initialise the random component, apply modifications, and write the
-# resulting initial conditions:
-
+# resulting initial conditions
 
 # Numpy array with the white noise field on a grid:
 dump_whitenoise 0 # <-- for the base grid
-#dump_whitenoise 1 # <-- for the first zoom region
+dump_whitenoise 1 # <-- for the first zoom region
 
 done
 # Optionally, write diagnostic output --
 
 # Matter power spectrum:
 dump_ps 0 # <-- the power spectrum evaluated on the base grid
-#dump_ps 1 # <-- the power spectrum evaluated on the first zoom region
-
-
-# Numpy array with the overdensity on a grid:
-dump_grid 0 # <-- for the base grid
-#dump_grid 1 # <-- for the first zoom region
+dump_ps 1 # <-- the power spectrum evaluated on the first zoom region

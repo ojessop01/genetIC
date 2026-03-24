@@ -73,6 +73,9 @@ namespace io {
       Coordinate<T> vbvcAxisVector; //!< Axis vector for vb-vc perturbation.
       std::optional<T> vbvcVelocityOverrideKms; //!< Optional override for vb-vc velocity (km/s).
       bool writeExtraGraficFields; //!< Always write extra fields even if features are disabled.
+      bool writeMatterDensity; //!< Write matter overdensity to ic_deltam file.
+      bool writeGraficWhiteNoise; //!< Write white noise field to ic_whitenoise file.
+      std::shared_ptr<fields::OutputField<DataType>> whiteNoiseOutputField; //!< White noise field for grafic output.
 
     public:
       /*! \brief Constructor
@@ -101,6 +104,9 @@ namespace io {
                    Coordinate<T> vbvcAxisVector,
                    std::optional<T> vbvcVelocityOverrideKms,
                    bool writeExtraGraficFields,
+                   bool writeMatterDensity,
+                   bool writeGraficWhiteNoise,
+                   std::shared_ptr<fields::OutputField<DataType>> whiteNoiseField,
                    const T pvarValue,
                    Coordinate<T> center,
                    size_t subsample,
@@ -118,6 +124,9 @@ namespace io {
         vbvcAxisVector(vbvcAxisVector),
         vbvcVelocityOverrideKms(vbvcVelocityOverrideKms),
         writeExtraGraficFields(writeExtraGraficFields),
+        writeMatterDensity(writeMatterDensity),
+        writeGraficWhiteNoise(writeGraficWhiteNoise),
+        whiteNoiseOutputField(whiteNoiseField),
         fbaryon(T(0)),
         fc(T(0)) {
 
@@ -202,6 +211,8 @@ namespace io {
         const bool writeIsocurvatureFields = set_isocurvature || writeExtraGraficFields;
         const std::optional<size_t> deltacIndex = writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_deltac")) : std::nullopt;
         const std::optional<size_t> masscIndex = writeIsocurvatureFields ? std::optional<size_t>(addFloatFile("ic_massc")) : std::nullopt;
+        const std::optional<size_t> deltamIndex = writeMatterDensity ? std::optional<size_t>(addFloatFile("ic_deltam")) : std::nullopt;
+        const std::optional<size_t> wnIndex = writeGraficWhiteNoise ? std::optional<size_t>(addFloatFile("ic_whitenoise")) : std::nullopt;
 
         std::vector<tools::MemMapFileWriter> files;
         files.reserve(floatFilenames.size());
@@ -314,6 +325,15 @@ namespace io {
                 varMaps[*masscIndex][file_index]  = massc;
               }
 
+              if (deltamIndex) {
+                varMaps[*deltamIndex][file_index] = deltam;
+              }
+
+              if (wnIndex) {
+                auto& wnField = whiteNoiseOutputField->getFieldForLevel(level);
+                varMaps[*wnIndex][file_index] = static_cast<float>(tools::datatypes::real_part_if_complex(wnField[i]));
+              }
+
               idMap[file_index] = global_index;
             }
           }
@@ -366,6 +386,9 @@ namespace io {
               Coordinate<T> vbvcAxisVector,
               std::optional<T> vbvcVelocityOverrideKms,
               bool writeExtraGraficFields,
+              bool writeMatterDensity,
+              bool writeGraficWhiteNoise,
+              std::shared_ptr<fields::OutputField<DataType>> whiteNoiseField,
               const T pvarValue,
               Coordinate<T> center,
               size_t subsample,
@@ -377,8 +400,9 @@ namespace io {
                                     cosmology, isocurvatureEnabled,
                                     applyVbvcVelocity, vbvcAxis, vbvcSigmaMultiplier,
                                     vbvcAxisVectorEnabled, vbvcAxisVector, vbvcVelocityOverrideKms,
-                                    writeExtraGraficFields, pvarValue,
-                                    center, subsample, supersample,
+                                    writeExtraGraficFields, writeMatterDensity,
+                                    writeGraficWhiteNoise, whiteNoiseField,
+                                    pvarValue, center, subsample, supersample,
                                     input_mask, outputFields);
       output.write();
     }

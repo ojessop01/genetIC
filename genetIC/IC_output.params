@@ -1,7 +1,7 @@
-# genetIC v1.5.0, compiled: Feb 11 2026, 22:42:23
-#                  runtime: Feb 24 2026, 00:07:24
+# genetIC v1.5.0, compiled: Mar 23 2026, 18:02:14
+#                  runtime: Mar 24 2026, 11:57:27
 
-# git HEAD:355b19b
+# git HEAD:e9f8206
 # At the time of compilation, the following files had been modified:
 #   IC_output.params
 #   genetIC
@@ -9,28 +9,38 @@
 #   src/bindings.hpp
 #   src/cosmology/camb.hpp
 #   src/ic.hpp
+#   src/io/grafic.hpp
+#   test.txt
+#   test1.txt
+#   test3.txt
 #   
-ob 0.0494 
-om 0.3158 
-ol 0.6842 
-s8 0.8117 
-ns 0.966 
-hubble 0.6732 
-z 127 
+om 0.3086 
+ol 0.6914 
+s8 0.8288 
+ns 0.9611 
+hubble 0.6777 
+zin 99 
 random_seed 8896131 
-base_grid 25 128 
+base_grid 25 256 
 alpha_k_limits_from_boxsize true 
-alpha_k_max 50 
-camb planck_2018_transfer_out.dat 
-isocurvature false 
-vbvc_velocity false 
+alpha_k_max 10 
+camb /cosma7/data/dp004/dc-jess1/EDGE/transfer_function/planck15_transfer_out_z0.dat 
+isocurvature true 
+vbvc_velocity true 
 vbvc_axis 0 
 vbvc_sigma 3 
+vbvc_velocity_kms 9.291 
 write_extra_grafic_fields true 
-outname test 
-outdir /home/kbgj57/genetIC/example/no-iso/ 
+write_matter_density true 
+write_grafic_whitenoise true 
+outname test_ic 
+outdir /cosma/apps/durham/dc-jess1/genetIC/example/ICs 
 outformat grafic 
+centre 0 0 0 
+select_sphere 1.25 
+zoom_grid 2 256 
 dump_whitenoise 0 
+dump_whitenoise 1 
 done 
 dump_ps 0 
-dump_grid 0 
+dump_ps 1 
