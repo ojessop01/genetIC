@@ -1,4 +1,4 @@
-# Test the RF generator with reversed seeding
+# Test the RF generator with reversed seeding (legacy_fourier_white_noise reproduces pre-fix realisations)
 
 
 # output parameters
@@ -19,5 +19,7 @@ basegrid 50.0 8
 # fourier seeding
 seedfourier_reverse	8896131
 
+
+legacy_fourier_white_noise
 
 done

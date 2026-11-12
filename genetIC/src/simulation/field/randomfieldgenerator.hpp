@@ -32,6 +32,7 @@ namespace fields {
     bool reverseRandomDrawOrder; //!< If true, order in which random numbers for complex numbers is drawn is reversed.
     bool seeded; //!< True if the random number generator has already been seeded
     bool parallel; //!< True if we want to draw random numbers in parallel
+    bool drawShellEdges = true; //!< If false, reproduce the pre-fix Fourier draw, which never drew the shell-edge modes
     unsigned long baseSeed; //!< Stores the last seed used.
     MultiLevelField <DataType> &field; //!< Reference to the multilevel field we are drawing random numbers for.
 
@@ -55,6 +56,7 @@ namespace fields {
       seeded = copy.seeded;
       baseSeed = copy.baseSeed;
       parallel = copy.parallel;
+      drawShellEdges = copy.drawShellEdges;
       randomNumberGeneratorType = copy.randomNumberGeneratorType;
       drawInFourierSpace = copy.drawInFourierSpace;
       reverseRandomDrawOrder = copy.reverseRandomDrawOrder;
@@ -71,6 +73,7 @@ namespace fields {
       seeded = false;
       baseSeed = copy.baseSeed;
       parallel = copy.parallel;
+      drawShellEdges = copy.drawShellEdges;
       randomNumberGeneratorType = copy.randomNumberGeneratorType;
       drawInFourierSpace = copy.drawInFourierSpace;
       reverseRandomDrawOrder = copy.reverseRandomDrawOrder;
@@ -100,6 +103,15 @@ namespace fields {
     //! Sets reverseRandomDrawOrder to true or false
     void setReverseRandomDrawOrder(bool value) {
       reverseRandomDrawOrder = value;
+    }
+
+    /*! \brief If false, leave the shell-edge Fourier modes at zero, as genetIC did before they were drawn.
+
+        Only useful to reproduce initial conditions made with earlier versions bit for bit; see
+        drawRandomForSpecifiedGridFourier.
+    */
+    void setDrawShellEdges(bool value) {
+      drawShellEdges = value;
     }
 
     //!\brief Seeds the random number generator with the specified seed.
@@ -196,9 +208,34 @@ namespace fields {
 
     }
 
+    /*! \brief Draw the modes on the edges of cubic shell ks that the face loops cannot reach.
+
+        The face loops in drawRandomForSpecifiedGridFourier draw every mode with a component equal to +ks whose other
+        two components lie in [-ks, ks). A real field's mode k is the conjugate of -k, so a mode is covered if k or -k
+        is drawn. That misses exactly the modes where +ks (or -ks) occurs in two or three components:
+        (ks, ks, x), (ks, x, ks) and (x, ks, ks) with -ks < x < ks, and the corner (ks, ks, ks). Those are 6 ks - 2
+        modes per shell (about 2% of all modes on a 64^3 grid, and more than 30% of the largest-scale modes), and
+        before this was fixed they were left at zero.
+    */
+    void drawShellEdgeModes(Field <DataType> &field, int ks, FloatType norm, gsl_rng *localRandomState) {
+      if (ks == 0)
+        return;
+      for (int x = -ks + 1; x < ks; x++) {
+        drawOneFourierMode(field, ks, ks, x, norm, localRandomState);
+        drawOneFourierMode(field, ks, x, ks, norm, localRandomState);
+        drawOneFourierMode(field, x, ks, ks, norm, localRandomState);
+      }
+      drawOneFourierMode(field, ks, ks, ks, norm, localRandomState);
+    }
+
     /*! \brief Draw random white noise in Fourier space.
         \param field - field to draw for
         Draws will potentially be in parallel if this option has been specified.
+
+        Modes are drawn shell by shell (shell ks holds the modes whose largest |component| is ks), so for a given box
+        and seed the same modes are drawn at any grid resolution. The shell-edge modes are drawn after the other draws
+        of their shell (parallel) or from a separate per-shell stream (serial), so that adding them did not change the
+        value of any mode that earlier versions drew. Modes with a component at the Nyquist frequency are not drawn.
     */
     void drawRandomForSpecifiedGridFourier(Field <DataType> &field) {
 
@@ -238,6 +275,8 @@ namespace fields {
               drawOneFourierMode(field, k1, k2, ks, sigma, localRandomState);
             }
           }
+          if (drawShellEdges)
+            drawShellEdgeModes(field, ks, sigma, localRandomState);
           gsl_rng_free(localRandomState);
 
         }
@@ -253,6 +292,17 @@ namespace fields {
               drawOneFourierMode(field, k1, k2, ks, sigma, randomState);
             }
           }
+        }
+        // All shells share one random stream here, so the edges cannot be drawn from it without changing the face
+        // modes that earlier versions drew. Each shell's edges get their own stream instead, which also keeps them
+        // independent of the grid resolution.
+        if (drawShellEdges) {
+          gsl_rng *edgeRandomState = gsl_rng_alloc(randomNumberGeneratorType);
+          for (int ks = 1; ks < int(g.size / 2); ks++) {
+            gsl_rng_set(edgeRandomState, baseSeed + ks);
+            drawShellEdgeModes(field, ks, sigma, edgeRandomState);
+          }
+          gsl_rng_free(edgeRandomState);
         }
       }
 

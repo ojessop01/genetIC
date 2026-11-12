@@ -35,6 +35,7 @@ void setup_parser(tools::ClassDispatch<ICType, void> &dispatch) {
     dispatch.add_class_route("random_seed", static_cast<void (ICType::*)(int)>(&ICType::setSeedFourierParallel));
     dispatch.add_class_route("random_seed_serial", static_cast<void (ICType::*)(int)>(&ICType::setSeedFourier));
     dispatch.add_class_route("random_seed_real_space", static_cast<void (ICType::*)(int)>(&ICType::setSeed));
+    dispatch.add_class_route("legacy_fourier_white_noise", &ICType::setLegacyFourierWhiteNoise);
 
     // Optional computational properties
     dispatch.add_deprecated_class_route("exact_power_spectrum_enforcement", "fix_power", &ICType::setExactPowerSpectrumEnforcement);

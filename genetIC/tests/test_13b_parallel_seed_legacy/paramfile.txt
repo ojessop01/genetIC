@@ -1,0 +1,20 @@
+# Parallel Fourier seeding with legacy_fourier_white_noise must reproduce realisations from before the shell-edge fix
+
+Om  0.279
+Ol  0.721
+#Ob  0.04
+s8  0.817
+zin	99
+
+random_seed	42
+camb	../camb_transfer_kmax40_z0.dat
+
+outname test_13
+outdir	 ./
+outformat tipsy
+
+
+basegrid 10.0 8
+
+legacy_fourier_white_noise
+done
