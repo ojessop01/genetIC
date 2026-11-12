@@ -651,6 +651,18 @@ public:
     randomFieldGenerator->setReverseRandomDrawOrder(false);
   }
 
+  /*! \brief Reproduce the white noise of genetIC versions that never drew the shell-edge Fourier modes.
+
+      Earlier versions left the modes whose largest |component| is shared by two components of the same sign, e.g.
+      (4, 4, -3), at zero (1-2% of all modes, over 30% of the largest-scale ones). Use this only to regenerate old
+      initial conditions bit for bit; every other mode is identical with or without it.
+  */
+  void setLegacyFourierWhiteNoise() {
+    logging::entry(logging::level::warning) << "WARNING: legacy_fourier_white_noise: the shell-edge Fourier modes are "
+                                               "left at zero, reproducing earlier genetIC versions" << endl;
+    randomFieldGenerator->setDrawShellEdges(false);
+  }
+
   //!\brief Specifies the seed in fourier space, but with reversed order of draws between real and imaginary part of complex numbers.
   /*!
    * Provided for historical compatibility issues (where we discovered too late an initialization ambiguity in C++)

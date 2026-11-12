@@ -1,0 +1,21 @@
+# Every Fourier mode below Nyquist must be drawn. Modes on the edges of the cubic shells, e.g. (4,4,-3), used to be
+# left at zero (up to 30% of the lowest-k modes). With fix_power each drawn mode has |delta_k|^2 = P(k) exactly, so in
+# the .ps output the measured power (column 4) equals the theory (column 3) in every bin below the Nyquist planes.
+
+Om  0.279
+Ol  0.721
+Ob  0.04
+s8  0.817
+zin	99
+random_seed 8896131
+fix_power
+camb	../camb_transfer_kmax40_z0.dat
+
+outdir	 ./
+outname test_27
+outformat tipsy
+
+base_grid 50.0 32
+done
+
+dump_ps 0
